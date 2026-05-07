@@ -27,7 +27,23 @@ export default function Chat() {
   useEffect(() => {
     if (!profile) return;
     fetchAcceptedFriends();
-  }, [profile]);
+
+    // Subscribe to friendship changes
+    const friendsChannel = supabase
+      .channel(`chat_friends_sync_${profile.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'friends'
+      }, () => {
+        fetchAcceptedFriends();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(friendsChannel);
+    };
+  }, [profile?.id]);
 
   useEffect(() => {
     if (!profile) return;
@@ -190,6 +206,18 @@ export default function Chat() {
 
       const { error } = await supabase.from('messages').insert(payload);
       if (error) throw error;
+
+      // Add notification for recipient if it's a private chat
+      if (withUserId) {
+        await supabase.from('notifications').insert({
+          user_id: withUserId,
+          type: 'new_message',
+          title: 'Pesan Baru',
+          content: `${profile.display_name} mengirimkan pesan baru: "${content.substring(0, 50)}${content.length > 50 ? '...' : ''}"`,
+          data: { sender_id: profile.id, chat_id: profile.id }, // chat_id logic depends on implementation
+          is_read: false
+        });
+      }
     } catch (err: any) {
       Swal.fire({ toast: true, position: 'top-end', icon: 'error', title: err.message, showConfirmButton: false, timer: 3000 });
       setNewMessage(content);

@@ -31,12 +31,14 @@ import Swal from 'sweetalert2';
 
 export default function UserLayout() {
   const { profile, user, isAdmin } = useAuth();
-  const { reminders } = useNotifications();
+  const { reminders, notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [isProfileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
 
   // Derived display name and username for robustness
   const displayName = profile?.display_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
@@ -63,6 +65,9 @@ export default function UserLayout() {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setProfileMenuOpen(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setIsNotifOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -124,12 +129,12 @@ export default function UserLayout() {
   const [friendCount, setFriendCount] = useState(0);
 
   const fetchFriendCount = useCallback(async () => {
-    if (!user) return;
+    if (!profile) return;
     try {
       const { count, error } = await supabase
         .from('friends')
         .select('id', { count: 'exact' })
-        .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`)
+        .or(`user_id.eq.${profile.id},friend_id.eq.${profile.id}`)
         .eq('status', 'accepted');
       
       if (error) {
@@ -140,42 +145,42 @@ export default function UserLayout() {
     } catch (err) {
       console.error("Error fetching friend count:", err);
     }
-  }, [user?.id]);
+  }, [profile?.id]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!profile) return;
 
     fetchProgress();
     fetchFriendCount();
 
     // Subscribe to real-time changes
     const booksChannel = supabase
-      .channel(`books_progress_${user.id}`)
+      .channel(`books_progress_${profile.id}`)
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
         table: 'books',
-        filter: `owner_id=eq.${user.id}`
+        filter: `owner_id=eq.${profile.id}`
       }, fetchProgress)
       .subscribe();
 
     const logsChannel = supabase
-      .channel(`logs_progress_${user.id}`)
+      .channel(`logs_progress_${profile.id}`)
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
         table: 'reading_logs',
-        filter: `user_id=eq.${user.id}`
+        filter: `user_id=eq.${profile.id}`
       }, fetchProgress)
       .subscribe();
     
     const profileChannel = supabase
-      .channel(`profile_sync_layout_${user.id}`)
+      .channel(`profile_sync_layout_${profile.id}`)
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
         table: 'profiles',
-        filter: `id=eq.${user.id}`
+        filter: `id=eq.${profile.id}`
       }, (payload) => {
         if (payload.new.monthly_target) {
           setMonthlyProgress(prev => ({ ...prev, goal: payload.new.monthly_target }));
@@ -188,13 +193,20 @@ export default function UserLayout() {
       })
       .subscribe();
 
+    // Listen to ALL friend changes for this user
     const friendsChannel = supabase
-      .channel(`friends_sync_layout_${user.id}`)
+      .channel(`friends_sync_layout_${profile.id}`)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'friends'
-      }, fetchFriendCount)
+      }, (payload) => {
+        // Only refresh if the change affects current profile
+        const target = (payload.new || payload.old) as any;
+        if (target?.user_id === profile.id || target?.friend_id === profile.id) {
+          fetchFriendCount();
+        }
+      })
       .subscribe();
 
     return () => {
@@ -203,7 +215,7 @@ export default function UserLayout() {
       supabase.removeChannel(profileChannel);
       supabase.removeChannel(friendsChannel);
     };
-  }, [user?.id, fetchProgress, fetchFriendCount]);
+  }, [profile?.id, fetchProgress, fetchFriendCount]);
 
   // Reminder Notification System
   useEffect(() => {
@@ -323,7 +335,7 @@ export default function UserLayout() {
       links.push({ to: '/app/admin/chat', icon: MessageSquare, label: 'Support Chat' });
     }
     return links;
-  }, [isAdmin]);
+  }, [isAdmin, friendCount]);
 
   return (
     <div className="flex h-screen bg-[#faf9f6] overflow-hidden font-sans transition-colors duration-300">
@@ -490,17 +502,97 @@ export default function UserLayout() {
           </div>
 
           <div className="flex items-center gap-6">
-            <Link 
-              to="/app/user/reminders"
-              className="relative p-2.5 bg-tan-50 hover:bg-primary/10 text-slate-500 hover:text-primary rounded-xl transition-all group"
-            >
-              <Bell size={20} className="group-hover:rotate-12 transition-transform" />
-              {reminders.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white animate-bounce-short">
-                  {reminders.length}
-                </span>
-              )}
-            </Link>
+            <div className="relative" ref={notifRef}>
+              <button 
+                onClick={() => setIsNotifOpen(!isNotifOpen)}
+                className={`relative p-2.5 rounded-xl transition-all group ${isNotifOpen ? 'bg-primary/10 text-primary' : 'bg-tan-50 text-slate-500 hover:text-primary hover:bg-primary/5'}`}
+              >
+                <Bell size={20} className={isNotifOpen ? '' : 'group-hover:rotate-12 transition-transform'} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-white animate-bounce-short">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              <AnimatePresence>
+                {isNotifOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 15, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 15, scale: 0.95 }}
+                    className="absolute right-0 mt-4 w-80 bg-white border border-tan-50 rounded-[32px] shadow-2xl shadow-slate-200 py-2 z-50 overflow-hidden"
+                  >
+                    <div className="px-6 py-4 border-b border-tan-50 flex items-center justify-between bg-tan-50/20">
+                       <h4 className="text-[10px] font-black text-primary uppercase tracking-widest">Notifikasi</h4>
+                       {unreadCount > 0 && (
+                         <button 
+                           onClick={markAllAsRead}
+                           className="text-[9px] font-black text-slate-400 hover:text-primary uppercase tracking-wider transition-colors"
+                         >
+                           Tandai Semua Sudah Baca
+                         </button>
+                       )}
+                    </div>
+
+                    <div className="max-h-[400px] overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="py-12 px-6 text-center">
+                          <Bell size={32} className="mx-auto text-tan-100 mb-3" />
+                          <p className="text-xs font-bold text-slate-400">Belum ada notifikasi baru.</p>
+                        </div>
+                      ) : (
+                        notifications.map(notif => (
+                          <div 
+                            key={notif.id} 
+                            className={`px-6 py-4 border-b border-tan-50/50 hover:bg-tan-50/30 transition-colors cursor-pointer group ${!notif.is_read ? 'bg-primary/[0.02]' : ''}`}
+                            onClick={() => {
+                              markAsRead(notif.id);
+                              if (notif.type === 'friend_request') navigate('/app/user/friends');
+                              if (notif.type === 'new_message') navigate(`/app/user/chat?with=${notif.data?.sender_id}`);
+                              setIsNotifOpen(false);
+                            }}
+                          >
+                            <div className="flex gap-4">
+                              <div className={`shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center ${
+                                notif.type === 'friend_request' ? 'bg-indigo-50 text-indigo-500' :
+                                notif.type === 'friend_accepted' ? 'bg-emerald-50 text-emerald-500' :
+                                'bg-primary/10 text-primary'
+                              }`}>
+                                {notif.type === 'friend_request' ? <Users size={18} /> :
+                                 notif.type === 'friend_accepted' ? <Heart size={18} /> :
+                                 <MessageSquare size={18} />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-extrabold text-slate-900 group-hover:text-primary transition-colors">{notif.title}</p>
+                                <p className="text-[11px] font-medium text-slate-500 leading-relaxed mt-0.5 line-clamp-2">{notif.content}</p>
+                                <p className="text-[9px] font-bold text-slate-300 mt-2 uppercase tracking-wide">
+                                  {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              </div>
+                              {!notif.is_read && (
+                                <div className="shrink-0 w-2 h-2 bg-primary rounded-full mt-1.5 shadow-sm shadow-primary/40"></div>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    {notifications.length > 0 && (
+                      <div className="p-4 text-center">
+                        <Link 
+                          to="/app/user/notifications" 
+                          onClick={() => setIsNotifOpen(false)}
+                          className="text-[10px] font-black text-slate-400 hover:text-primary uppercase tracking-widest transition-colors"
+                        >
+                          Lihat Riwayat Lengkap
+                        </Link>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
             <Link 
               to="/" 
               className="flex items-center gap-2 px-5 py-2.5 bg-tan-50 hover:bg-primary hover:text-white text-primary rounded-2xl transition-all font-bold text-xs uppercase tracking-widest shadow-sm shadow-primary/5"

@@ -34,6 +34,7 @@ import Chat from './pages/Chat';
 import AdminChat from './pages/admin/AdminChat';
 import Friends from './pages/social/Friends';
 import ProfileDetail from './pages/social/ProfileDetail';
+import Notifications from './pages/social/Notifications';
 
 function ProtectedRoute({ children, adminOnly = false }: { children: React.ReactNode, adminOnly?: boolean }) {
   const { user, profile, loading, isAdmin } = useAuth();
@@ -99,6 +100,7 @@ export default function App() {
             <Route path="quotes" element={<Quotes />} />
             <Route path="profile" element={<Profile />} />
             <Route path="profile/:id" element={<ProfileDetail />} />
+            <Route path="notifications" element={<Notifications />} />
             <Route path="friends" element={<Friends />} />
             <Route path="chat" element={<Chat />} />
           </Route>

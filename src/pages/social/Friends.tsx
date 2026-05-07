@@ -13,7 +13,7 @@ import {
   ChevronRight,
   UserMinus
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import Swal from 'sweetalert2';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -51,6 +51,7 @@ export default function Friends() {
   }, [user]);
 
   const fetchFriends = async () => {
+    if (!profile) return;
     try {
       // Fetch where user is either user_id or friend_id
       const { data, error } = await supabase
@@ -60,7 +61,7 @@ export default function Friends() {
           user:profiles!friends_user_id_fkey(id, display_name, username, avatar_url, last_read_book_title, last_read_page),
           friend:profiles!friends_friend_id_fkey(id, display_name, username, avatar_url, last_read_book_title, last_read_page)
         `)
-        .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`)
+        .or(`user_id.eq.${profile.id},friend_id.eq.${profile.id}`)
         .eq('status', 'accepted');
 
       if (error) throw error;
@@ -68,7 +69,7 @@ export default function Friends() {
       const formattedFriends = data?.map(item => {
         const userObj = Array.isArray(item.user) ? item.user[0] : item.user;
         const friendObj = Array.isArray(item.friend) ? item.friend[0] : item.friend;
-        const otherUser = userObj.id === user.id ? friendObj : userObj;
+        const otherUser = userObj.id === profile.id ? friendObj : userObj;
         return { ...otherUser, status: item.status };
       }) || [];
 
@@ -81,6 +82,7 @@ export default function Friends() {
   };
 
   const fetchRequests = async () => {
+    if (!profile) return;
     try {
       const { data, error } = await supabase
         .from('friends')
@@ -88,7 +90,7 @@ export default function Friends() {
           id,
           user:profiles!friends_user_id_fkey(id, display_name, username, avatar_url)
         `)
-        .eq('friend_id', user.id)
+        .eq('friend_id', profile.id)
         .eq('status', 'pending');
 
       if (error) throw error;
@@ -148,6 +150,16 @@ export default function Friends() {
 
       if (error) throw error;
 
+      // Add Notification for recipient
+      await supabase.from('notifications').insert({
+        user_id: friendId,
+        type: 'friend_request',
+        title: 'Permintaan Pertemanan',
+        content: `${profile.display_name} mengirimkan permintaan pertemanan.`,
+        data: { sender_id: profile.id },
+        is_read: false
+      });
+
       Swal.fire({
         icon: 'success',
         title: 'Permintaan Terkirim',
@@ -164,12 +176,31 @@ export default function Friends() {
 
   const respondToRequest = async (requestId: string, status: 'accepted' | 'rejected') => {
     try {
+      // Get request details before updating
+      const { data: reqData } = await supabase
+        .from('friends')
+        .select('user_id')
+        .eq('id', requestId)
+        .single();
+
       const { error } = await supabase
         .from('friends')
         .update({ status })
         .eq('id', requestId);
 
       if (error) throw error;
+
+      if (status === 'accepted' && reqData) {
+        // Notify original sender
+        await supabase.from('notifications').insert({
+          user_id: reqData.user_id,
+          type: 'friend_accepted',
+          title: 'Permintaan Diterima!',
+          content: `${profile?.display_name} telah menerima permintaan pertemanan kamu. Sekarang kalian bisa chat!`,
+          data: { friend_id: profile?.id },
+          is_read: false
+        });
+      }
 
       Swal.fire({
         icon: status === 'accepted' ? 'success' : 'info',
@@ -200,8 +231,7 @@ export default function Friends() {
         const { error } = await supabase
           .from('friends')
           .delete()
-          .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`)
-          .or(`user_id.eq.${friendId},friend_id.eq.${friendId}`);
+          .or(`and(user_id.eq.${profile?.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${profile?.id})`);
 
         if (error) throw error;
         setFriends(friends.filter(f => f.id !== friendId));

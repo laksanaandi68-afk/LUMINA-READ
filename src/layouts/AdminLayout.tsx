@@ -55,9 +55,32 @@ export default function AdminLayout() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const [pendingReports, setPendingReports] = useState(0);
+
+  useEffect(() => {
+    const fetchPendingReports = async () => {
+      const { count } = await supabase
+        .from('reports')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+      setPendingReports(count || 0);
+    };
+
+    fetchPendingReports();
+
+    const channel = supabase
+      .channel('admin_reports_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, fetchPendingReports)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const adminLinks = [
     { to: '/app/admin/dashboard', icon: LayoutDashboard, label: 'Overview' },
-    { to: '/app/admin/reports', icon: ShieldAlert, label: 'Laporan User' },
+    { to: '/app/admin/reports', icon: ShieldAlert, label: 'Laporan User', badge: pendingReports },
     { to: '/app/admin/chats', icon: MessageCircle, label: 'Pantau Chat' },
     { to: '/app/admin/users', icon: Users, label: 'Users & Bans' },
     { to: '/app/admin/books', icon: BookOpen, label: 'Koleksi Buku' },
@@ -207,7 +230,7 @@ export default function AdminLayout() {
   );
 }
 
-function AdminSidebarLink({ to, icon: Icon, label, active, collapsed }: any) {
+function AdminSidebarLink({ to, icon: Icon, label, active, collapsed, badge }: any) {
   return (
     <Link 
       to={to} 
@@ -220,7 +243,15 @@ function AdminSidebarLink({ to, icon: Icon, label, active, collapsed }: any) {
       `}
     >
       <Icon size={20} className="shrink-0" />
-      {!collapsed && <span className="text-sm font-bold tracking-tight">{label}</span>}
+      {!collapsed && <span className="text-sm font-bold tracking-tight flex-1">{label}</span>}
+      {!collapsed && badge > 0 && (
+        <span className="px-2 py-0.5 bg-red-500 text-white text-[10px] font-black rounded-lg">
+          {badge}
+        </span>
+      )}
+      {collapsed && badge > 0 && (
+        <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-[#0f1115]"></span>
+      )}
       {collapsed && (
         <div className="absolute left-full ml-4 px-3 py-2 bg-slate-800 text-white text-[10px] uppercase font-black tracking-widest rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-2xl border border-white/5">
           {label}

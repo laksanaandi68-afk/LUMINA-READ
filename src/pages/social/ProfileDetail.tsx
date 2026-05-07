@@ -121,14 +121,25 @@ export default function ProfileDetail() {
   };
 
   const handleFriendAction = async () => {
-    if (!profile || friendshipStatus === 'accepted' || friendshipStatus === 'pending') return;
+    if (!myProfile || friendshipStatus === 'accepted' || friendshipStatus === 'pending') return;
 
     try {
       const { error } = await supabase
         .from('friends')
-        .insert({ user_id: profile.id, friend_id: id, status: 'pending' });
+        .insert({ user_id: myProfile.id, friend_id: id, status: 'pending' });
       
       if (error) throw error;
+
+      // Add Notification
+      await supabase.from('notifications').insert({
+        user_id: id,
+        type: 'friend_request',
+        title: 'Permintaan Pertemanan',
+        content: `${myProfile.display_name} mengirimkan permintaan pertemanan.`,
+        data: { sender_id: myProfile.id },
+        is_read: false
+      });
+
       setFriendshipStatus('pending');
       Swal.fire({
         icon: 'success',
@@ -142,7 +153,7 @@ export default function ProfileDetail() {
   };
 
   const handleReportUser = async () => {
-    if (!user) return;
+    if (!user || !myProfile) return;
 
     const { value: formValues } = await Swal.fire({
       title: `<div class="text-xl font-black text-slate-900 mb-2">Laporkan @${targetProfile.username}</div>`,
@@ -182,7 +193,7 @@ export default function ProfileDetail() {
         const { error } = await supabase
           .from('reports')
           .insert({
-            reporter_id: profile.id,
+            reporter_id: myProfile.id,
             reported_user_id: id,
             reason: formValues.reason,
             description: formValues.description,
