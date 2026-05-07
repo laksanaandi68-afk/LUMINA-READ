@@ -1,0 +1,36 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --color-primary: #D2B48C; /* Tan */
+  --color-primary-dark: #b69b78; /* Darker Tan */
+  --color-primary-light: #e6d5bc; /* Lighter Tan */
+  --color-tan-50: #faf7f2;
+  --color-tan-100: #f5eedf;
+  --color-slate-50: #fdfcfb;
+
+  @keyframes bounce-short {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+  --animate-bounce-short: bounce-short 1s ease-in-out infinite;
+}
+
+@layer base {
+  body {
+    @apply font-sans text-slate-800 bg-[#fdfcfb];
+  }
+}
+
+.tan-gradient {
+  background: linear-gradient(135deg, #f5eedf 0%, #ffffff 100%);
+}
+
+.tan-hero-gradient {
+  background: linear-gradient(135deg, #D2B48C 0%, #e6d5bc 100%);
+}
+
+.main-gradient {
+  background: linear-gradient(to bottom right, #ffffff, rgba(245, 238, 223, 0.4));
+}

@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Metadata collection for initialization
+    match /metadata/system {
+      allow read: if true;
+      allow write: if !exists(/databases/$(database)/documents/metadata/system);
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if true; // Allowed for public stats/profiles
+      allow write: if isOwner(userId) || isAdmin();
+      
+      // Prevent self-promotion to admin unless already exists or first user
+      allow update: if isOwner(userId) && 
+        (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    // Books collection - Publicly readable
+    match /books/{bookId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Reading Tracks collection
+    match /reading_tracks/{trackId} {
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
+    // Posts collection
+    match /posts/{postId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+  }
+}

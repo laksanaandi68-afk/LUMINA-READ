@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role and settings",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "username": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "avatarUrl": { "type": "string" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Book": {
+      "title": "Book",
+      "description": "Digital book entity",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "author": { "type": "string" },
+        "genre": { "type": "string" },
+        "synopsis": { "type": "string" },
+        "content": { "type": "string" },
+        "coverUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" }
+      },
+      "required": ["title", "author", "content"]
+    },
+    "ReadingTrack": {
+      "title": "Reading Track",
+      "description": "User progress on a specific book",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "bookId": { "type": "string" },
+        "progress": { "type": "number" },
+        "lastPage": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "bookId"]
+    },
+    "Testimonial": {
+      "title": "Testimonial",
+      "description": "User feedback and rating",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "rating": { "type": "number", "minimum": 1, "maximum": 5 },
+        "message": { "type": "string", "minLength": 10 },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user_id", "rating", "message"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/books/{bookId}": {
+      "schema": "Book",
+      "description": "Book collection"
+    },
+    "/reading_tracks/{trackId}": {
+      "schema": "ReadingTrack",
+      "description": "Reading progress tracking"
+    },
+    "/testimonials/{testimonialId}": {
+      "schema": "Testimonial",
+      "description": "User feedback"
+    }
+  }
+}
