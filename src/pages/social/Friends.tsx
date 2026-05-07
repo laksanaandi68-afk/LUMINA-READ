@@ -18,7 +18,7 @@ import Swal from 'sweetalert2';
 import { Link, useNavigate } from 'react-router-dom';
 
 export default function Friends() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'search'>('friends');
   const [loading, setLoading] = useState(true);
@@ -132,11 +132,16 @@ export default function Friends() {
   };
 
   const sendRequest = async (friendId: string) => {
+    if (!profile) {
+      Swal.fire('Error', 'Profil kamu belum siap. Silakan refresh halaman.', 'error');
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('friends')
         .insert({
-          user_id: user.id,
+          user_id: profile.id,
           friend_id: friendId,
           status: 'pending'
         });

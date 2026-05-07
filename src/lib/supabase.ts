@@ -29,3 +29,34 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     headers: { 'x-application-name': 'lumina-read' }
   }
 });
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+  }
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null, userId?: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: userId,
+    },
+    operationType,
+    path
+  };
+  console.error('Database Error Context:', JSON.stringify(errInfo, null, 2));
+  return errInfo;
+}

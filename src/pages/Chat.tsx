@@ -8,7 +8,7 @@ import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 
 export default function Chat() {
-  const { user, isAdmin } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const withUserId = searchParams.get('with');
@@ -25,12 +25,12 @@ export default function Chat() {
   const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!profile) return;
     fetchAcceptedFriends();
-  }, [user]);
+  }, [profile]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!profile) return;
     
     if (withUserId) {
       validateAndFetchFriendProfile();
@@ -53,14 +53,14 @@ export default function Chat() {
         const msg = payload.new;
         
         const isPrivateTarget = withUserId && (
-          (msg.sender_id === user.id && msg.receiver_id === withUserId) || 
-          (msg.sender_id === withUserId && msg.receiver_id === user.id)
+          (msg.sender_id === profile.id && msg.receiver_id === withUserId) || 
+          (msg.sender_id === withUserId && msg.receiver_id === profile.id)
         );
         
         const isSupportTarget = !withUserId && (
-          (msg.user_id === user.id) || 
+          (msg.user_id === profile.id) || 
           (isAdmin && !msg.receiver_id) || 
-          (msg.receiver_id === user.id && !msg.sender_id) 
+          (msg.receiver_id === profile.id && !msg.sender_id) 
         );
 
         if (isPrivateTarget || isSupportTarget) {
@@ -75,9 +75,10 @@ export default function Chat() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id, withUserId, isAdmin]);
+  }, [profile?.id, withUserId, isAdmin]);
 
   const fetchAcceptedFriends = async () => {
+    if (!profile) return;
     setLoadingFriends(true);
     try {
       const { data, error } = await supabase
@@ -87,7 +88,7 @@ export default function Chat() {
           user:profiles!friends_user_id_fkey(id, display_name, username, avatar_url, last_read_book_title, last_read_page),
           friend:profiles!friends_friend_id_fkey(id, display_name, username, avatar_url, last_read_book_title, last_read_page)
         `)
-        .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`)
+        .or(`user_id.eq.${profile.id},friend_id.eq.${profile.id}`)
         .eq('status', 'accepted');
 
       if (error) throw error;
@@ -95,7 +96,7 @@ export default function Chat() {
       const formattedFriends = data?.map(item => {
         const uObj = Array.isArray(item.user) ? item.user[0] : item.user;
         const fObj = Array.isArray(item.friend) ? item.friend[0] : item.friend;
-        const otherUser = uObj.id === user.id ? fObj : uObj;
+        const otherUser = uObj.id === profile.id ? fObj : uObj;
         return { ...otherUser, status: item.status };
       }) || [];
 
@@ -108,12 +109,13 @@ export default function Chat() {
   };
 
   const validateAndFetchFriendProfile = async () => {
+    if (!profile) return;
     setFriendshipLoading(true);
     try {
       const { data: friendship } = await supabase
         .from('friends')
         .select('status')
-        .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`)
+        .or(`user_id.eq.${profile.id},friend_id.eq.${profile.id}`)
         .or(`user_id.eq.${withUserId},friend_id.eq.${withUserId}`)
         .eq('status', 'accepted')
         .maybeSingle();
@@ -140,17 +142,17 @@ export default function Chat() {
   };
 
   const fetchMessages = async () => {
-    if (!user) return;
+    if (!profile) return;
     setLoading(true);
     try {
       let query = supabase.from('messages').select('*');
 
       if (withUserId) {
-        query = query.or(`and(sender_id.eq.${user.id},receiver_id.eq.${withUserId}),and(sender_id.eq.${withUserId},receiver_id.eq.${user.id})`);
+        query = query.or(`and(sender_id.eq.${profile.id},receiver_id.eq.${withUserId}),and(sender_id.eq.${withUserId},receiver_id.eq.${profile.id})`);
       } else if (isAdmin) {
         query = query.is('receiver_id', null).order('created_at', { ascending: true });
       } else {
-        query = query.or(`user_id.eq.${user.id},and(sender_id.eq.${user.id},receiver_id.is.null),and(sender_id.is.null,receiver_id.eq.${user.id})`);
+        query = query.or(`user_id.eq.${profile.id},and(sender_id.eq.${profile.id},receiver_id.is.null),and(sender_id.is.null,receiver_id.eq.${profile.id})`);
       }
 
       const { data, error } = await query.order('created_at', { ascending: true });
@@ -165,7 +167,7 @@ export default function Chat() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !user) return;
+    if (!newMessage.trim() || !profile) return;
 
     const content = newMessage.trim();
     setNewMessage('');
@@ -173,7 +175,7 @@ export default function Chat() {
 
     try {
       const payload: any = {
-        sender_id: user.id,
+        sender_id: profile.id,
         content: content,
         created_at: new Date().toISOString()
       };
@@ -182,7 +184,7 @@ export default function Chat() {
         payload.receiver_id = withUserId;
       } else {
         // Admin Support Mode Logic
-        payload.user_id = user.id;
+        payload.user_id = profile.id;
         payload.sender = isAdmin ? 'admin' : 'user';
       }
 
@@ -201,7 +203,7 @@ export default function Chat() {
   const onEmojiClick = (emojiData: any) => setNewMessage(p => p + emojiData.emoji);
 
   const handleReport = async (msg: any) => {
-    if (!user) return;
+    if (!profile) return;
 
     const { value: formValues } = await Swal.fire({
       title: `<div class="text-xl font-black text-slate-900 mb-2">Laporkan Pesan</div>`,
@@ -239,7 +241,7 @@ export default function Chat() {
     if (formValues) {
       try {
         const { error } = await supabase.from('reports').insert({
-          reporter_id: user.id,
+          reporter_id: profile.id,
           reported_user_id: msg.sender_id,
           message_id: msg.id,
           reason: formValues.reason,
@@ -263,7 +265,7 @@ export default function Chat() {
   };
 
   const handleReportUser = async () => {
-    if (!user || !friendProfile) return;
+    if (!profile || !friendProfile) return;
 
     const { value: formValues } = await Swal.fire({
       title: `<div class="text-xl font-black text-slate-900 mb-2">Laporkan @${friendProfile.username}</div>`,
@@ -301,7 +303,7 @@ export default function Chat() {
     if (formValues) {
       try {
         const { error } = await supabase.from('reports').insert({
-          reporter_id: user.id,
+          reporter_id: profile.id,
           reported_user_id: friendProfile.id,
           reason: formValues.reason,
           description: formValues.description,
@@ -397,7 +399,7 @@ export default function Chat() {
 
       {/* Chat Area */}
       <div className="flex-1 flex flex-col bg-white">
-        {withUserId || !isAdmin ? (
+        {withUserId || (profile && !isAdmin) ? (
           <>
             <header className="px-8 py-6 border-b border-tan-50 bg-white flex items-center justify-between z-10 shrink-0">
               <div className="flex items-center gap-4">
@@ -481,7 +483,7 @@ export default function Chat() {
                  <div className="w-10 h-1 bg-tan-100 mx-auto rounded-full"></div>
               </div>
               {messages.map((msg, i) => {
-                const isMe = msg.sender_id === user.id || (msg.sender === (isAdmin ? 'admin' : 'user') && !msg.receiver_id);
+                const isMe = profile && (msg.sender_id === profile.id || (msg.sender === (isAdmin ? 'admin' : 'user') && !msg.receiver_id));
                 return (
                   <motion.div
                     key={msg.id || i}

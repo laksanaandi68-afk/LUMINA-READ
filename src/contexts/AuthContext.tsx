@@ -44,14 +44,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // 1. Initial Logic
     const initializeAuth = async () => {
-      // Safety timeout to ensure loading definitely stops
-      const timeoutId = setTimeout(() => {
-        if (mounted) {
-          console.warn("Auth initialization timed out, forcing loading false.");
-          setLoading(false);
-        }
-      }, 2500);
-
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         
@@ -67,16 +59,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(initialUser);
         
         if (initialUser) {
-          // Fetch profile but don't let it block indefinitely - 1.5s is plenty
-          await Promise.race([
-            fetchProfile(initialUser.id),
-            new Promise(resolve => setTimeout(resolve, 1500))
-          ]);
+          await fetchProfile(initialUser.id);
         }
       } catch (err) {
         console.error("Critical Auth Init Failure:", err);
       } finally {
-        clearTimeout(timeoutId);
         if (mounted) setLoading(false);
       }
     };
@@ -150,6 +137,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (!uid) return;
     
     try {
+      // 1. Try to get existing profile
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -158,29 +146,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (error) {
         console.error('Fetch profile error:', error);
-        return;
       }
 
-      // Check if profile is missing CRITICAL data (healing)
-      if (!data || !data.display_name || !data.username || !data.email) {
-        // Fallback user check
-        const { data: { user: authUser } } = await supabase.auth.getUser();
+      // 2. If record is missing or incomplete, try to heal it
+      if (!data || !data.display_name || !data.username) {
+        console.log("Profile missing or incomplete for:", uid, "attempting healing...");
         
+        const { data: { user: authUser } } = await supabase.auth.getUser();
         if (!authUser || authUser.id !== uid) {
           if (data) setProfile(data as UserProfile);
           return;
         }
 
-        console.log("Healing or creating profile for:", uid);
         const baseUsername = data?.username || authUser.email?.split('@')[0] || 'user';
         const uniqueSuffix = authUser.id.substring(1, 6);
         const metadata = authUser.user_metadata || {};
 
-        const { data: updatedProfile, error: upsertError } = await supabase
+        // Use upsert to ensure the record exists
+        const { data: healedProfile, error: healError } = await supabase
           .from('profiles')
           .upsert({
             id: uid,
-            email: authUser.email || data?.email,
+            email: authUser.email || data?.email || '',
             display_name: data?.display_name || metadata.full_name || metadata.displayName || baseUsername,
             username: data?.username || metadata.username || (baseUsername.toLowerCase().replace(/[^a-z0-9]/g, '') + uniqueSuffix),
             role: data?.role || (authUser.email === 'admin@gmail.com' ? 'admin' : 'user'),
@@ -190,14 +177,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .select()
           .maybeSingle();
 
-        if (upsertError) {
-          console.error('Profile healing error:', upsertError);
-          // If upsert fails, it might be due to missing columns.
-          // Fallback to basic state if record exists or blank Profile
+        if (healError) {
+          console.error('Profile healing COMPLETELY failed:', healError);
+          // If heal fails, we STILL have a problem with foreign keys later.
+          // But we'll set the minimal profile to avoid breaking other UI parts.
           if (data) {
-            setProfile(data);
+            setProfile(data as UserProfile);
           } else {
-            // Last resort: minimal profile object to unlock UI
             setProfile({
               id: uid,
               email: authUser.email || '',
@@ -205,13 +191,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               username: baseUsername,
               role: authUser.email === 'admin@gmail.com' ? 'admin' : 'user',
               created_at: new Date().toISOString()
-            });
+            } as UserProfile);
           }
-        } else if (updatedProfile) {
-          setProfile(updatedProfile);
+        } else if (healedProfile) {
+          console.log("Profile successfully healed!");
+          setProfile(healedProfile as UserProfile);
         }
       } else {
-        setProfile(data);
+        setProfile(data as UserProfile);
       }
     } catch (err) {
       console.error('Critical Fetch profile error:', err);

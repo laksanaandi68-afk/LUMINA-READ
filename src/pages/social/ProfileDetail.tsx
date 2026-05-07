@@ -121,12 +121,12 @@ export default function ProfileDetail() {
   };
 
   const handleFriendAction = async () => {
-    if (!user || friendshipStatus === 'accepted' || friendshipStatus === 'pending') return;
+    if (!profile || friendshipStatus === 'accepted' || friendshipStatus === 'pending') return;
 
     try {
       const { error } = await supabase
         .from('friends')
-        .insert({ user_id: user.id, friend_id: id, status: 'pending' });
+        .insert({ user_id: profile.id, friend_id: id, status: 'pending' });
       
       if (error) throw error;
       setFriendshipStatus('pending');
@@ -182,7 +182,7 @@ export default function ProfileDetail() {
         const { error } = await supabase
           .from('reports')
           .insert({
-            reporter_id: user.id,
+            reporter_id: profile.id,
             reported_user_id: id,
             reason: formValues.reason,
             description: formValues.description,

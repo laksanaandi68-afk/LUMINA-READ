@@ -98,7 +98,7 @@ export default function Community() {
   };
 
   const handleReportUser = async (targetUser: any) => {
-    if (!user) return;
+    if (!profile) return;
 
     const { value: formValues } = await Swal.fire({
       title: `<div class="text-xl font-black text-slate-900 mb-2">Laporkan @${targetUser.username}</div>`,
@@ -136,7 +136,7 @@ export default function Community() {
     if (formValues) {
       try {
         const { error } = await supabase.from('reports').insert({
-          reporter_id: user.id,
+          reporter_id: profile.id,
           reported_user_id: targetUser.id,
           reason: formValues.reason,
           description: formValues.description,
