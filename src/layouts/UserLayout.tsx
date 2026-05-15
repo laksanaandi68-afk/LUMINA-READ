@@ -19,19 +19,21 @@ import {
   User,
   Heart,
   ShieldCheck,
+  ShieldAlert,
   Globe,
   Clock,
   Bell,
-  Users,
   MoreVertical
 } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Swal from 'sweetalert2';
+import { NotificationToast, ToastContainer } from '../components/NotificationToast';
 
 export default function UserLayout() {
-  const { profile, user, isAdmin } = useAuth();
-  const { reminders, notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const { profile, user, isAdmin, logout } = useAuth();
+  const { reminders, notifications, activeToasts, unreadCount, markAsRead, markAllAsRead, removeToast } = useNotifications();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setSidebarOpen] = useState(true);
@@ -41,24 +43,11 @@ export default function UserLayout() {
   const notifRef = useRef<HTMLDivElement>(null);
 
   // Derived display name and username for robustness
-  const displayName = profile?.display_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
-  const username = profile?.username || user?.user_metadata?.username || user?.email?.split('@')[0] || 'user';
+  const displayName = profile?.display_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Pembaca';
+  const username = profile?.username || user?.user_metadata?.username || user?.email?.split('@')[0] || 'pembaca';
 
   const handleLogout = async () => {
-    try {
-      // Clear all possible local session data first for immediate UI response
-      localStorage.clear();
-      sessionStorage.clear();
-      
-      // Perform Supabase sign out
-      await supabase.auth.signOut();
-      
-      // Full redirect to landing to reset all React states/providers
-      window.location.replace('/');
-    } catch (err) {
-      console.error("Logout error:", err);
-      window.location.replace('/');
-    }
+    await logout();
   };
 
   useEffect(() => {
@@ -126,32 +115,10 @@ export default function UserLayout() {
     }
   }, [profile]);
 
-  const [friendCount, setFriendCount] = useState(0);
-
-  const fetchFriendCount = useCallback(async () => {
-    if (!profile) return;
-    try {
-      const { count, error } = await supabase
-        .from('friends')
-        .select('id', { count: 'exact' })
-        .or(`user_id.eq.${profile.id},friend_id.eq.${profile.id}`)
-        .eq('status', 'accepted');
-      
-      if (error) {
-        console.error("Supabase count error:", error);
-        return;
-      }
-      setFriendCount(count || 0);
-    } catch (err) {
-      console.error("Error fetching friend count:", err);
-    }
-  }, [profile?.id]);
-
   useEffect(() => {
     if (!profile) return;
 
     fetchProgress();
-    fetchFriendCount();
 
     // Subscribe to real-time changes
     const booksChannel = supabase
@@ -193,80 +160,12 @@ export default function UserLayout() {
       })
       .subscribe();
 
-    // Listen to ALL friend changes for this user
-    const friendsChannel = supabase
-      .channel(`friends_sync_layout_${profile.id}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'friends'
-      }, (payload) => {
-        // Only refresh if the change affects current profile
-        const target = (payload.new || payload.old) as any;
-        if (target?.user_id === profile.id || target?.friend_id === profile.id) {
-          fetchFriendCount();
-        }
-      })
-      .subscribe();
-
     return () => {
       supabase.removeChannel(booksChannel);
       supabase.removeChannel(logsChannel);
       supabase.removeChannel(profileChannel);
-      supabase.removeChannel(friendsChannel);
     };
-  }, [profile?.id, fetchProgress, fetchFriendCount]);
-
-  // Reminder Notification System
-  useEffect(() => {
-    if (!user) return;
-
-    const checkReminders = async () => {
-      try {
-        const now = new Date();
-        const { data: upcomingReminders, error } = await supabase
-          .from('reminders')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('is_notified', false)
-          .lte('scheduled_at', now.toISOString());
-
-        if (error) throw error;
-
-        if (upcomingReminders && upcomingReminders.length > 0) {
-          for (const reminder of upcomingReminders) {
-            // Trigger Notification
-            Swal.fire({
-              title: 'Pengingat Waktu! 🔔',
-              text: reminder.title,
-              icon: 'info',
-              confirmButtonText: 'Oke, Saya Ingat!',
-              confirmButtonColor: '#D2B48C',
-              footer: reminder.description,
-              toast: false,
-              position: 'center'
-            });
-
-            // Mark as notified
-            await supabase
-              .from('reminders')
-              .update({ is_notified: true, status: 'completed' })
-              .eq('id', reminder.id);
-          }
-          // Refresh progress if needed
-          fetchProgress();
-        }
-      } catch (err) {
-        console.error("Reminder check error:", err);
-      }
-    };
-
-    // Check every 30 seconds
-    const interval = setInterval(checkReminders, 30000);
-    checkReminders(); // Initial check
-
-    return () => clearInterval(interval);
-  }, [user]);
+  }, [profile?.id, fetchProgress]);
 
   const handleUpdateMonthlyGoal = async () => {
     if (!user) return;
@@ -323,178 +222,242 @@ export default function UserLayout() {
     const links = [
       { to: '/app/user/dashboard', icon: Home, label: 'Dashboard' },
       { to: '/app/user/library', icon: LibraryIcon, label: 'Perpustakaan' },
-      { to: '/app/user/friends', icon: Users, label: `Teman (${friendCount})` },
       { to: '/app/user/tracker', icon: BarChart2, label: 'Lacak & Target' },
       { to: '/app/user/calendar', icon: Calendar, label: 'Kalender' },
       { to: '/app/user/quotes', icon: Quote, label: 'Quotes & Review' },
       { to: '/app/user/bookmarks', icon: Bookmark, label: 'Buku Favorit' },
+      { to: '/app/user/testimonial', icon: Heart, label: 'Testimoni' },
+      { to: '/app/user/reports', icon: ShieldAlert, label: 'Laporkan Masalah' },
     ];
 
     if (isAdmin) {
       links.push({ to: '/app/admin/dashboard', icon: ShieldCheck, label: 'Admin Panel' });
-      links.push({ to: '/app/admin/chat', icon: MessageSquare, label: 'Support Chat' });
     }
     return links;
-  }, [isAdmin, friendCount]);
+  }, [isAdmin]);
 
   return (
-    <div className="flex h-screen bg-[#faf9f6] overflow-hidden font-sans transition-colors duration-300">
-      {/* Sidebar */}
-      <motion.aside 
-        initial={false}
-        animate={{ width: isSidebarOpen ? 280 : 80 }}
-        className="bg-white border-r border-tan-50 flex flex-col z-30 shadow-[20px_0_40px_rgba(0,0,0,0.01)]"
-      >
-        <div className="p-8 flex items-center justify-between">
-          <Link to="/app/user/dashboard" className="flex items-center gap-3 overflow-hidden min-w-[200px]">
-            <div className="w-11 h-11 rounded-2xl bg-primary flex items-center justify-center text-white shrink-0 font-bold text-xl shadow-lg shadow-primary/20">
-              <Compass size={24} />
-            </div>
-            <AnimatePresence>
-              {isSidebarOpen && (
+    <div className="flex h-screen bg-[#faf9f6] overflow-hidden font-sans transition-colors duration-300 relative">
+      {/* Mobile Bottom Navigation */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-tan-50 flex items-center justify-around px-4 z-[100] pb-safe">
+        {userLinks.slice(0, 5).map((link) => {
+          const isActive = location.pathname === link.to;
+          return (
+            <Link 
+              key={link.to} 
+              to={link.to} 
+              className={`flex flex-col items-center justify-center gap-1 transition-all ${isActive ? 'text-primary' : 'text-slate-400'}`}
+            >
+              <link.icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+              <span className={`text-[10px] font-black uppercase tracking-tighter ${isActive ? 'opacity-100' : 'opacity-60'}`}>
+                {link.label.split(' ')[0]}
+              </span>
+              {isActive && (
                 <motion.div 
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  className="flex flex-col"
-                >
-                  <span className="font-extrabold text-xl tracking-tight text-slate-900 leading-none">LuminaRead</span>
-                  <span className="text-[10px] text-primary font-black uppercase tracking-[0.2em] mt-1">Pusat Pembaca</span>
-                </motion.div>
+                  layoutId="bottomNavDot"
+                  className="w-1 h-1 bg-primary rounded-full absolute bottom-1"
+                />
               )}
-            </AnimatePresence>
-          </Link>
-        </div>
+            </Link>
+          );
+        })}
+        <button 
+          onClick={() => setSidebarOpen(true)}
+          className="flex flex-col items-center justify-center gap-1 text-slate-400"
+        >
+          <Menu size={20} />
+          <span className="text-[10px] font-black uppercase tracking-tighter opacity-60">Menu</span>
+        </button>
+      </nav>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
-          <nav className="space-y-1.5">
-            {userLinks.map((link) => (
-              <UserSidebarLink 
-                key={link.to} 
-                {...link} 
-                active={location.pathname === link.to} 
-                collapsed={!isSidebarOpen}
-              />
-            ))}
-          </nav>
-
-          {isSidebarOpen && (
-            <div className="space-y-4 px-4 overflow-hidden">
-              {/* Monthly Goal Card */}
-              <div className="p-5 rounded-3xl bg-tan-50/50 border border-tan-50 relative overflow-hidden group">
-                <div className="relative z-10">
-                  <div className="flex justify-between items-start mb-1">
-                    <p className="text-[10px] font-black text-primary uppercase tracking-widest">Target Bulanan</p>
-                    <span className="text-[10px] font-black text-primary/40 bg-white px-2 py-0.5 rounded-full">{monthlyPercent}%</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {isEditingMonthly ? (
-                      <div className="flex items-center gap-2">
-                        <input 
-                          type="number" 
-                          value={newMonthlyGoal} 
-                          onChange={(e) => setNewMonthlyGoal(parseInt(e.target.value) || 1)}
-                          className="w-12 bg-white border border-tan-100 rounded-lg text-sm font-bold px-1 outline-none focus:ring-1 focus:ring-primary"
-                          autoFocus
-                          onBlur={handleUpdateMonthlyGoal}
-                          onKeyDown={(e) => e.key === 'Enter' && handleUpdateMonthlyGoal()}
-                        />
-                        <span className="text-sm font-extrabold text-slate-900">Buku</span>
-                      </div>
-                    ) : (
-                      <p 
-                        className="text-lg font-extrabold text-slate-900 cursor-pointer hover:text-primary transition-colors flex items-center gap-2"
-                        onClick={() => setIsEditingMonthly(true)}
-                        title="Klik untuk ubah target"
-                      >
-                        {monthlyProgress.completed} / {monthlyProgress.goal} Buku
-                      </p>
-                    )}
-                  </div>
-                  <div className="mt-3 w-full h-1.5 bg-white rounded-full overflow-hidden">
-                    <motion.div 
-                      layout
-                      initial={{ width: 0 }}
-                      animate={{ width: `${monthlyPercent}%` }}
-                      transition={{ type: 'spring', stiffness: 50 }}
-                      className="h-full bg-primary rounded-full shadow-sm"
-                    />
-                  </div>
-                  <p className="text-[9px] font-bold text-slate-400 mt-2 italic line-clamp-1">{motivationalMonthly}</p>
-                </div>
-                <Sparkles className="absolute -right-2 -bottom-2 text-primary/5 group-hover:scale-125 transition-transform" size={60} />
-              </div>
-
-              {/* Daily Goal Card */}
-              <div className="p-5 rounded-3xl bg-slate-900 relative overflow-hidden group">
-                <div className="relative z-10">
-                  <div className="flex justify-between items-start mb-1">
-                    <p className="text-[10px] font-black text-white/50 uppercase tracking-widest">Target Harian</p>
-                    <span className="text-[10px] font-black text-white/20 bg-white/5 px-2 py-0.5 rounded-full">{dailyPercent}%</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {isEditingDaily ? (
-                      <div className="flex items-center gap-2">
-                        <input 
-                          type="number" 
-                          value={newDailyGoal} 
-                          onChange={(e) => setNewDailyGoal(parseInt(e.target.value) || 1)}
-                          className="w-12 bg-white/10 border border-white/20 rounded-lg text-sm font-bold px-1 outline-none focus:ring-1 focus:ring-white text-white"
-                          autoFocus
-                          onBlur={handleUpdateDailyGoal}
-                          onKeyDown={(e) => e.key === 'Enter' && handleUpdateDailyGoal()}
-                        />
-                        <span className="text-sm font-extrabold text-white">Hal</span>
-                      </div>
-                    ) : (
-                      <p 
-                        className="text-lg font-extrabold text-white cursor-pointer hover:text-primary transition-colors flex items-center gap-2"
-                        onClick={() => setIsEditingDaily(true)}
-                        title="Klik untuk ubah target"
-                      >
-                        {dailyProgress.pages} / {dailyProgress.goal} Hal
-                      </p>
-                    )}
-                  </div>
-                  <div className="mt-3 w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                    <motion.div 
-                      layout
-                      initial={{ width: 0 }}
-                      animate={{ width: `${dailyPercent}%` }}
-                      transition={{ type: 'spring', stiffness: 50 }}
-                      className="h-full bg-white rounded-full shadow-sm"
-                    />
-                  </div>
-                  <p className="text-[9px] font-bold text-white/40 mt-2 italic line-clamp-1">{motivationalDaily}</p>
-                </div>
-                <Clock className="absolute -right-2 -bottom-2 text-white/5 group-hover:rotate-12 transition-transform" size={60} />
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="p-6 mt-auto">
-          <button 
-            type="button"
-            onClick={handleLogout}
-            className={`w-full flex items-center gap-3 p-4 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all font-bold text-sm cursor-pointer relative z-50 ${!isSidebarOpen && 'justify-center p-3'}`}
+      {/* Sidebar - Desktop & Tablet */}
+      <AnimatePresence>
+        {(isSidebarOpen || !window.matchMedia('(max-width: 768px)').matches) && (
+          <motion.aside 
+            initial={window.innerWidth < 768 ? { x: -280 } : false}
+            animate={{ x: 0, width: isSidebarOpen ? 280 : 80 }}
+            exit={{ x: -280 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className={`bg-white border-r border-tan-50 flex flex-col z-[110] shadow-[20px_0_40px_rgba(0,0,0,0.01)] fixed md:relative h-full`}
           >
-            <LogOut size={20} className="shrink-0" />
-            {isSidebarOpen && <span className="whitespace-nowrap">Keluar</span>}
-          </button>
-        </div>
-      </motion.aside>
+            {/* Mobile Sidebar Close Button */}
+            <button 
+              onClick={() => setSidebarOpen(false)}
+              className="md:hidden absolute top-6 right-6 p-2 bg-tan-50 rounded-xl text-slate-400"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="p-6 md:p-8 flex items-center justify-between">
+              <Link to="/app/user/dashboard" className="flex items-center gap-3 overflow-hidden min-w-[200px]">
+                <div className="w-11 h-11 rounded-2xl bg-primary flex items-center justify-center text-white shrink-0 font-bold text-xl shadow-lg shadow-primary/20">
+                  <Compass size={24} />
+                </div>
+                <AnimatePresence>
+                  {isSidebarOpen && (
+                    <motion.div 
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -10 }}
+                      className="flex flex-col"
+                    >
+                      <span className="font-extrabold text-xl tracking-tight text-slate-900 leading-none">LuminaRead</span>
+                      <span className="text-[10px] text-primary font-black uppercase tracking-[0.2em] mt-1">Pusat Pembaca</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </Link>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6 scrollbar-hide">
+              <nav className="space-y-1.5">
+                {userLinks.map((link) => (
+                  <UserSidebarLink 
+                    key={link.to} 
+                    {...link} 
+                    active={location.pathname === link.to} 
+                    collapsed={!isSidebarOpen}
+                    onClick={() => window.innerWidth < 768 && setSidebarOpen(false)}
+                  />
+                ))}
+              </nav>
+
+              {isSidebarOpen && (
+                <div className="space-y-4 px-4 overflow-hidden">
+                  {/* Monthly Goal Card */}
+                  <div className="p-5 rounded-3xl bg-tan-50/50 border border-tan-50 relative overflow-hidden group">
+                    <div className="relative z-10">
+                      <div className="flex justify-between items-start mb-1">
+                        <p className="text-[10px] font-black text-primary uppercase tracking-widest">Target Bulanan</p>
+                        <span className="text-[10px] font-black text-primary/40 bg-white px-2 py-0.5 rounded-full">{monthlyPercent}%</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isEditingMonthly ? (
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="number" 
+                              value={newMonthlyGoal} 
+                              onChange={(e) => setNewMonthlyGoal(parseInt(e.target.value) || 1)}
+                              className="w-12 bg-white border border-tan-100 rounded-lg text-sm font-bold px-1 outline-none focus:ring-1 focus:ring-primary"
+                              autoFocus
+                              onBlur={handleUpdateMonthlyGoal}
+                              onKeyDown={(e) => e.key === 'Enter' && handleUpdateMonthlyGoal()}
+                            />
+                            <span className="text-sm font-extrabold text-slate-900">Buku</span>
+                          </div>
+                        ) : (
+                          <p 
+                            className="text-lg font-extrabold text-slate-900 cursor-pointer hover:text-primary transition-colors flex items-center gap-2"
+                            onClick={() => setIsEditingMonthly(true)}
+                            title="Klik untuk ubah target"
+                          >
+                            {monthlyProgress.completed} / {monthlyProgress.goal} Buku
+                          </p>
+                        )}
+                      </div>
+                      <div className="mt-3 w-full h-1.5 bg-white rounded-full overflow-hidden">
+                        <motion.div 
+                          layout
+                          initial={{ width: 0 }}
+                          animate={{ width: `${monthlyPercent}%` }}
+                          transition={{ type: 'spring', stiffness: 50 }}
+                          className="h-full bg-primary rounded-full shadow-sm"
+                        />
+                      </div>
+                    </div>
+                    <Sparkles className="absolute -right-2 -bottom-2 text-primary/5 group-hover:scale-125 transition-transform" size={60} />
+                  </div>
+
+                  {/* Daily Goal Card */}
+                  <div className="p-5 rounded-3xl bg-slate-900 relative overflow-hidden group">
+                    <div className="relative z-10">
+                      <div className="flex justify-between items-start mb-1">
+                        <p className="text-[10px] font-black text-white/50 uppercase tracking-widest">Target Harian</p>
+                        <span className="text-[10px] font-black text-white/20 bg-white/5 px-2 py-0.5 rounded-full">{dailyPercent}%</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isEditingDaily ? (
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="number" 
+                              value={newDailyGoal} 
+                              onChange={(e) => setNewDailyGoal(parseInt(e.target.value) || 1)}
+                              className="w-12 bg-white/10 border border-white/20 rounded-lg text-sm font-bold px-1 outline-none focus:ring-1 focus:ring-white text-white"
+                              autoFocus
+                              onBlur={handleUpdateDailyGoal}
+                              onKeyDown={(e) => e.key === 'Enter' && handleUpdateDailyGoal()}
+                            />
+                            <span className="text-sm font-extrabold text-white">Hal</span>
+                          </div>
+                        ) : (
+                          <p 
+                            className="text-lg font-extrabold text-white cursor-pointer hover:text-primary transition-colors flex items-center gap-2"
+                            onClick={() => setIsEditingDaily(true)}
+                            title="Klik untuk ubah target"
+                          >
+                            {dailyProgress.pages} / {dailyProgress.goal} Hal
+                          </p>
+                        )}
+                      </div>
+                      <div className="mt-3 w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                        <motion.div 
+                          layout
+                          initial={{ width: 0 }}
+                          animate={{ width: `${dailyPercent}%` }}
+                          transition={{ type: 'spring', stiffness: 50 }}
+                          className="h-full bg-white rounded-full shadow-sm"
+                        />
+                      </div>
+                    </div>
+                    <Clock className="absolute -right-2 -bottom-2 text-white/5 group-hover:rotate-12 transition-transform" size={60} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 mt-auto">
+              <button 
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleLogout();
+                }}
+                className={`w-full flex items-center gap-3 p-5 md:p-4 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all font-bold text-sm cursor-pointer relative z-50 ${!isSidebarOpen && 'justify-center p-3'}`}
+              >
+                <LogOut size={22} className="shrink-0" />
+                {isSidebarOpen && <span className="whitespace-nowrap">Keluar</span>}
+              </button>
+            </div>
+          </motion.aside>
+        )}
+      </AnimatePresence>
+
+      {/* Overlay for Mobile Sidebar */}
+      <AnimatePresence>
+        {isSidebarOpen && window.innerWidth < 768 && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[105] md:hidden"
+          />
+        )}
+      </AnimatePresence>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto bg-white relative">
-        <header className="h-20 flex items-center justify-between px-10 bg-white/80 backdrop-blur-xl border-b border-tan-50 sticky top-0 z-20 transition-all duration-300">
-          <div className="flex items-center gap-8">
+      <main className="flex-1 overflow-y-auto bg-white relative pb-20 md:pb-0">
+        <header className="h-16 md:h-20 flex items-center justify-between px-4 md:px-10 bg-white/80 backdrop-blur-xl border-b border-tan-50 sticky top-0 z-20 transition-all duration-300">
+          <div className="flex items-center gap-2 md:gap-8">
             <button 
               onClick={() => setSidebarOpen(!isSidebarOpen)} 
-              className="p-2.5 rounded-xl hover:bg-tan-50 text-primary transition-colors"
+              className="p-2 md:p-2.5 rounded-xl hover:bg-tan-50 text-primary transition-colors hidden md:block"
             >
               {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
+            <div className="md:hidden w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/20">
+              <Compass size={20} />
+            </div>
             <div className="hidden lg:flex items-center gap-2 px-4 py-2 bg-tan-50 rounded-full border border-primary/10">
                <Sparkles size={14} className="text-primary" />
                <span className="text-[10px] font-black uppercase tracking-widest text-primary">Pembaca Premium</span>
@@ -535,93 +498,81 @@ export default function UserLayout() {
                        )}
                     </div>
 
-                    <div className="max-h-[400px] overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <div className="py-12 px-6 text-center">
-                          <Bell size={32} className="mx-auto text-tan-100 mb-3" />
-                          <p className="text-xs font-bold text-slate-400">Belum ada notifikasi baru.</p>
+              <div className="max-h-[400px] overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <div className="py-12 px-6 text-center">
+                    <Bell size={32} className="mx-auto text-tan-100 mb-3" />
+                    <p className="text-xs font-bold text-slate-400">Belum ada notifikasi baru.</p>
+                  </div>
+                ) : (
+                  notifications.map(notif => (
+                    <div 
+                      key={notif.id} 
+                      className={`px-6 py-4 border-b border-tan-50/50 hover:bg-tan-50/30 transition-colors cursor-pointer group ${!notif.is_read ? 'bg-primary/[0.02]' : ''}`}
+                      onClick={() => {
+                        markAsRead(notif.id);
+                        setIsNotifOpen(false);
+                      }}
+                    >
+                      <div className="flex gap-4">
+                        <div className={`shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center ${
+                          notif.type === 'reminder' ? 'bg-amber-50 text-amber-500' :
+                          'bg-primary/10 text-primary'
+                        }`}>
+                          {notif.type === 'reminder' ? <Calendar size={18} /> :
+                           <Bell size={18} />}
                         </div>
-                      ) : (
-                        notifications.map(notif => (
-                          <div 
-                            key={notif.id} 
-                            className={`px-6 py-4 border-b border-tan-50/50 hover:bg-tan-50/30 transition-colors cursor-pointer group ${!notif.is_read ? 'bg-primary/[0.02]' : ''}`}
-                            onClick={() => {
-                              markAsRead(notif.id);
-                              if (notif.type === 'friend_request') navigate('/app/user/friends');
-                              if (notif.type === 'new_message') navigate(`/app/user/chat?with=${notif.data?.sender_id}`);
-                              setIsNotifOpen(false);
-                            }}
-                          >
-                            <div className="flex gap-4">
-                              <div className={`shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center ${
-                                notif.type === 'friend_request' ? 'bg-indigo-50 text-indigo-500' :
-                                notif.type === 'friend_accepted' ? 'bg-emerald-50 text-emerald-500' :
-                                'bg-primary/10 text-primary'
-                              }`}>
-                                {notif.type === 'friend_request' ? <Users size={18} /> :
-                                 notif.type === 'friend_accepted' ? <Heart size={18} /> :
-                                 <MessageSquare size={18} />}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-extrabold text-slate-900 group-hover:text-primary transition-colors">{notif.title}</p>
-                                <p className="text-[11px] font-medium text-slate-500 leading-relaxed mt-0.5 line-clamp-2">{notif.content}</p>
-                                <p className="text-[9px] font-bold text-slate-300 mt-2 uppercase tracking-wide">
-                                  {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </p>
-                              </div>
-                              {!notif.is_read && (
-                                <div className="shrink-0 w-2 h-2 bg-primary rounded-full mt-1.5 shadow-sm shadow-primary/40"></div>
-                              )}
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                    {notifications.length > 0 && (
-                      <div className="p-4 text-center">
-                        <Link 
-                          to="/app/user/notifications" 
-                          onClick={() => setIsNotifOpen(false)}
-                          className="text-[10px] font-black text-slate-400 hover:text-primary uppercase tracking-widest transition-colors"
-                        >
-                          Lihat Riwayat Lengkap
-                        </Link>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-extrabold text-slate-900 group-hover:text-primary transition-colors">{notif.title}</p>
+                          <p className="text-[11px] font-medium text-slate-500 leading-relaxed mt-0.5 line-clamp-2">{notif.content}</p>
+                          <p className="text-[9px] font-bold text-slate-300 mt-2 uppercase tracking-wide">
+                            {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                        {!notif.is_read && (
+                          <div className="shrink-0 w-2 h-2 bg-primary rounded-full mt-1.5 shadow-sm shadow-primary/40"></div>
+                        )}
                       </div>
-                    )}
-                  </motion.div>
+                    </div>
+                  ))
                 )}
-              </AnimatePresence>
-            </div>
-            <Link 
-              to="/" 
-              className="flex items-center gap-2 px-5 py-2.5 bg-tan-50 hover:bg-primary hover:text-white text-primary rounded-2xl transition-all font-bold text-xs uppercase tracking-widest shadow-sm shadow-primary/5"
-            >
-              <Globe size={16} />
-              <span className="hidden sm:inline">Halaman Utama</span>
-            </Link>
-            <div className="relative" ref={dropdownRef}>
-              <Link 
-                to={`/app/user/profile/${user?.id}`}
-                className="flex items-center gap-4 transition-all group outline-none"
-              >
-                <div className="w-12 h-12 rounded-[20px] bg-tan-50 border border-primary/10 flex items-center justify-center text-primary font-black text-lg overflow-hidden group-hover:shadow-lg group-hover:shadow-primary/10 transition-all">
-                  {profile?.avatar_url ? (
-                    <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
-                  ) : (
-                    displayName?.[0] || 'U'
-                  )}
-                </div>
-              </Link>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+      <Link 
+        to="/" 
+        className="flex items-center gap-2 px-5 py-2.5 bg-tan-50 hover:bg-primary hover:text-white text-primary rounded-2xl transition-all font-bold text-xs uppercase tracking-widest shadow-sm shadow-primary/5"
+      >
+        <Globe size={16} />
+        <span className="hidden sm:inline">Halaman Utama</span>
+      </Link>
+      <div className="relative" ref={dropdownRef}>
+        <div 
+          onClick={() => setProfileMenuOpen(!isProfileMenuOpen)}
+          className="flex items-center gap-4 transition-all group outline-none cursor-pointer"
+        >
+          <div className="w-12 h-12 rounded-[20px] bg-tan-50 border border-primary/10 flex items-center justify-center text-primary font-black text-lg overflow-hidden group-hover:shadow-lg group-hover:shadow-primary/10 transition-all">
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center bg-tan-50 text-primary">
+                <User size={24} className="text-primary/40" />
+              </div>
+            )}
+          </div>
+        </div>
               
               <button 
                 onClick={(e) => {
                   e.preventDefault();
+                  e.stopPropagation(); // Prevent Link from triggering
                   setProfileMenuOpen(!isProfileMenuOpen);
                 }}
-                className="absolute -bottom-1 -right-1 w-5 h-5 bg-white border border-tan-50 rounded-full flex items-center justify-center text-slate-400 hover:text-primary transition-all shadow-sm z-10"
+                className="absolute -bottom-2 -right-2 w-8 h-8 md:w-5 md:h-5 bg-white border border-tan-50 rounded-full flex items-center justify-center text-slate-400 hover:text-primary transition-all shadow-md z-10"
               >
-                <MoreVertical size={12} />
+                <MoreVertical size={16} className="md:w-3 md:h-3" />
               </button>
 
               <AnimatePresence>
@@ -667,33 +618,33 @@ export default function UserLayout() {
           </div>
         </header>
 
-        <div className="p-10 max-w-7xl mx-auto">
+        <div className="p-4 md:p-10 max-w-7xl mx-auto w-full overflow-x-hidden box-border">
           <Outlet />
         </div>
-        
-        {/* Floating Chat Button */}
-        {!isAdmin && (
-          <Link 
-            to="/app/user/chat"
-            className="fixed bottom-10 right-10 w-16 h-16 bg-primary text-white rounded-full flex items-center justify-center shadow-2xl shadow-primary/40 hover:scale-110 active:scale-95 transition-all z-50 group"
-          >
-             <div className="absolute -top-12 right-0 bg-slate-900 text-white text-[10px] font-black py-2 px-4 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl border border-white/10 pointer-events-none">
-                Bicara dengan Admin
-             </div>
-             <MessageSquare size={28} />
-             <span className="absolute top-0 right-0 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white animate-pulse"></span>
-          </Link>
-        )}
+
+        {/* Global Notification Toast Container */}
+        <ToastContainer>
+          <AnimatePresence>
+            {activeToasts.map((toast) => (
+              <NotificationToast 
+                key={toast.id} 
+                {...toast} 
+                onClose={removeToast} 
+              />
+            ))}
+          </AnimatePresence>
+        </ToastContainer>
       </main>
     </div>
   );
 }
 
-function UserSidebarLink({ to, icon: Icon, label, active, collapsed }: any) {
+function UserSidebarLink({ to, icon: Icon, label, active, collapsed, onClick }: any) {
   const { reminders } = useNotifications();
   return (
     <Link 
       to={to} 
+      onClick={onClick}
       className={`
         relative flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all group z-10 isolate
         ${active 
@@ -704,7 +655,7 @@ function UserSidebarLink({ to, icon: Icon, label, active, collapsed }: any) {
     >
       <Icon size={22} className={`shrink-0 ${active && 'text-primary'}`} strokeWidth={active ? 2.5 : 2} />
       {!collapsed && <span className="text-[15px] tracking-tight">{label}</span>}
-      {!collapsed && label === 'Pengingat' && reminders.length > 0 && (
+      {!collapsed && (label === 'Kalender' || label === 'Pengingat') && reminders.length > 0 && (
         <span className="w-2 h-2 bg-red-500 rounded-full ml-auto animate-pulse"></span>
       )}
       {collapsed && (

@@ -20,8 +20,8 @@ export default function Tracker() {
     
     fetchBooks();
 
-    const channel = supabase
-      .channel('tracker_realtime')
+    const syncChannel = supabase
+      .channel('tracker_page_sync')
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
@@ -30,10 +30,18 @@ export default function Tracker() {
       }, () => {
         fetchBooks();
       })
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'reading_logs',
+        filter: `user_id=eq.${user.id}`
+      }, () => {
+        fetchBooks();
+      })
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(syncChannel);
     };
   }, [user]);
 
@@ -209,31 +217,31 @@ export default function Tracker() {
   const TAN_GRADIENT = ['#D2B48C', '#C1A37B', '#B0926A', '#9F8159', '#8E7048'];
 
   return (
-    <div className="space-y-12 pb-20 font-sans">
+    <div className="space-y-8 md:space-y-12 pb-20 font-sans px-1">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight">Lacak Bacaan</h1>
-          <p className="text-slate-500 font-medium">Pantau progres membaca Anda dan capai target literasi Anda.</p>
+        <div className="min-w-0">
+          <h1 className="text-2xl md:text-4xl font-black text-slate-900 tracking-tight leading-tight">Lacak Progres</h1>
+          <p className="text-sm md:text-base text-slate-500 font-medium">Capai target literasi Anda dengan konsisten.</p>
         </div>
-        <div className="flex gap-4">
-          <StatMini label="Total Selesai" value={finishedBooksCount} color="text-primary" />
-          <StatMini label="Halaman Dibaca" value={totalPagesRead} color="text-indigo-500" />
+        <div className="flex gap-2 md:gap-4 overflow-x-auto no-scrollbar w-full md:w-auto pb-2 -mx-1 px-1">
+          <StatMini label="Selesai" value={finishedBooksCount} color="text-primary" />
+          <StatMini label="Halaman" value={totalPagesRead} color="text-indigo-500" />
         </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-10">
         {/* Progress List */}
-        <div className="lg:col-span-2 space-y-8">
-          <div className="flex items-center justify-between px-2">
-            <h2 className="text-xl font-black text-slate-900 flex items-center gap-3">
-              <BookOpen size={24} className="text-primary" /> Sedang Dibaca
+        <div className="lg:col-span-2 space-y-6 md:space-y-8">
+          <div className="flex items-center justify-between px-1 md:px-2">
+            <h2 className="text-lg md:text-xl font-black text-slate-900 flex items-center gap-2 md:gap-3">
+              <BookOpen size={20} md={24} className="text-primary" /> Sedang Dibaca
             </h2>
-            <span className="text-[10px] font-black uppercase text-slate-400 bg-tan-50 px-4 py-1.5 rounded-full">
-              {inProgressBooks.length} Buku Aktif
+            <span className="text-[8px] md:text-[10px] font-black uppercase text-slate-400 bg-tan-50 px-3 md:px-4 py-1 md:py-1.5 rounded-full">
+              {inProgressBooks.length} Buku
             </span>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-4 md:space-y-6">
             <AnimatePresence mode="popLayout">
               {inProgressBooks.length > 0 ? inProgressBooks.map((book) => (
                 <motion.div 
@@ -241,64 +249,64 @@ export default function Tracker() {
                   key={book.id}
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="bg-white p-8 rounded-[40px] border border-tan-50 shadow-sm hover:shadow-xl hover:shadow-slate-100 transition-all group"
+                  className="bg-white p-5 md:p-8 rounded-[32px] md:rounded-[40px] border border-tan-50 shadow-sm transition-all group"
                 >
-                  <div className="flex flex-col md:flex-row gap-8 items-start md:items-center">
-                    <div className="w-24 h-32 rounded-[24px] overflow-hidden shadow-lg shrink-0 border-4 border-white/50">
+                  <div className="flex flex-col sm:flex-row gap-5 md:gap-8 items-start sm:items-center">
+                    <div className="w-20 h-28 md:w-24 md:h-32 rounded-2xl md:rounded-[24px] overflow-hidden shadow-lg shrink-0 border-4 border-white/50">
                       <img src={book.cover_url || 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=400'} alt="" className="w-full h-full object-cover" />
                     </div>
                     
-                    <div className="flex-1 min-w-0 space-y-4">
+                    <div className="flex-1 min-w-0 space-y-3 md:space-y-4 w-full">
                       <div>
-                        <h3 className="text-xl font-black text-slate-900 group-hover:text-primary transition-colors line-clamp-1">{book.title}</h3>
-                        <p className="text-sm font-bold text-slate-400 tracking-tight">Oleh {book.author}</p>
+                        <h3 className="text-lg md:text-xl font-black text-slate-900 group-hover:text-primary transition-colors truncate">{book.title}</h3>
+                        <p className="text-xs md:text-sm font-bold text-slate-400 tracking-tight truncate">Oleh {book.author}</p>
                       </div>
 
-                      <div className="space-y-3">
-                        <div className="flex justify-between text-[11px] font-black uppercase tracking-widest text-slate-400">
+                      <div className="space-y-2 md:space-y-3">
+                        <div className="flex justify-between text-[9px] md:text-[11px] font-black uppercase tracking-widest text-slate-400">
                           <span>Status</span>
                           <span className="text-primary">{book.status}</span>
                         </div>
-                        <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase">
+                        <div className="flex justify-between text-[8px] md:text-[10px] font-bold text-slate-400 uppercase">
                           <span>{(book.total_pages || 100)} Halaman</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="w-full md:w-auto flex flex-col gap-3">
+                    <div className="w-full sm:w-auto flex flex-col gap-3 pt-2 sm:pt-0">
                       {updatingId === book.id ? (
-                        <div className="bg-tan-50 p-4 rounded-[28px] space-y-4 shadow-inner border border-primary/5">
-                           <div className="flex items-center gap-3">
-                              <button onClick={() => setNewPage(Math.max(0, newPage - 1))} className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-primary shadow-sm hover:bg-primary hover:text-white transition-all"><Minus size={16} /></button>
+                        <div className="bg-tan-50 p-4 md:p-4 rounded-2xl md:rounded-[28px] space-y-4 shadow-inner border border-primary/5">
+                           <div className="flex items-center justify-center gap-3">
+                              <button onClick={() => setNewPage(Math.max(0, newPage - 1))} className="w-9 h-9 md:w-10 md:h-10 bg-white rounded-xl flex items-center justify-center text-primary shadow-sm hover:bg-primary hover:text-white transition-all"><Minus size={14} md={16} /></button>
                               <input 
                                 type="number" 
                                 value={newPage} 
                                 onChange={(e) => setNewPage(parseInt(e.target.value) || 0)}
-                                className="w-20 text-center font-black text-lg bg-transparent border-none outline-none text-slate-900" 
+                                className="w-16 md:w-20 text-center font-black text-base md:text-lg bg-transparent border-none outline-none text-slate-900" 
                               />
-                              <button onClick={() => setNewPage(Math.min((book.total_pages || 100), newPage + 1))} className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-primary shadow-sm hover:bg-primary hover:text-white transition-all"><Plus size={16} /></button>
+                              <button onClick={() => setNewPage(Math.min((book.total_pages || 100), newPage + 1))} className="w-9 h-9 md:w-10 md:h-10 bg-white rounded-xl flex items-center justify-center text-primary shadow-sm hover:bg-primary hover:text-white transition-all"><Plus size={14} md={16} /></button>
                            </div>
                            <div className="flex gap-2">
-                             <button onClick={() => handleUpdateProgress(book)} className="flex-1 py-3 bg-primary text-white rounded-xl font-black text-[10px] uppercase shadow-lg shadow-primary/20 flex items-center justify-center gap-2"><Save size={14} /> Simpan</button>
-                             <button onClick={() => setUpdatingId(null)} className="px-4 py-3 bg-white text-slate-400 rounded-xl font-black text-[10px] uppercase border border-tan-50">Batal</button>
+                             <button onClick={() => handleUpdateProgress(book)} className="flex-1 py-2.5 md:py-3 bg-primary text-white rounded-xl font-black text-[9px] md:text-[10px] uppercase shadow-lg shadow-primary/20 flex items-center justify-center gap-2"><Save size={12} md={14} /> Simpan</button>
+                             <button onClick={() => setUpdatingId(null)} className="px-3 md:px-4 py-2.5 md:py-3 bg-white text-slate-400 rounded-xl font-black text-[9px] md:text-[10px] uppercase border border-tan-50">Batal</button>
                            </div>
                         </div>
                       ) : (
                         <button 
                           onClick={() => { setUpdatingId(book.id); setNewPage(0); }}
-                          className="w-full py-4 px-8 bg-slate-900 text-white rounded-[24px] font-black text-[11px] uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-slate-200"
+                          className="w-full py-3 md:py-4 px-6 md:px-8 bg-slate-900 text-white rounded-xl md:rounded-[24px] font-black text-[10px] md:text-[11px] uppercase tracking-widest hover:scale-[1.02] transition-all shadow-xl shadow-slate-200"
                         >
-                          Perbarui Progres
+                          Update Progres
                         </button>
                       )}
                     </div>
                   </div>
                 </motion.div>
               )) : (
-                <div className="text-center py-24 bg-white rounded-[48px] border-2 border-dashed border-tan-100">
-                  <BookOpen size={64} className="mx-auto text-tan-100 mb-6" />
-                  <p className="text-slate-400 font-bold italic">Belum ada buku dengan status "Sedang Dibaca".</p>
-                  <button onClick={() => navigate('/app/user/library')} className="mt-6 text-primary font-black uppercase tracking-widest text-[11px] hover:underline">Buka Perpustakaan</button>
+                <div className="text-center py-16 md:py-24 bg-white rounded-[32px] md:rounded-[48px] border-2 border-dashed border-tan-100">
+                  <BookOpen size={48} md={64} strokeWidth={1} className="mx-auto text-tan-100 mb-4 md:mb-6" />
+                  <p className="text-slate-400 font-bold italic text-sm md:text-base">Belum ada buku aktif.</p>
+                  <button onClick={() => navigate('/app/user/library')} className="mt-4 md:mt-6 text-primary font-black uppercase tracking-widest text-[9px] md:text-[11px] hover:underline">Buka Perpustakaan</button>
                 </div>
               )}
             </AnimatePresence>
@@ -306,19 +314,19 @@ export default function Tracker() {
         </div>
 
         {/* Analytics & Stats */}
-        <div className="space-y-10">
-          <div className="bg-white p-10 rounded-[48px] border border-tan-50 shadow-sm space-y-8">
-            <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
-              <TrendingUp size={24} className="text-primary" /> Statistik
+        <div className="space-y-8 md:space-y-10">
+          <div className="bg-white p-6 md:p-10 rounded-[32px] md:rounded-[48px] border border-tan-50 shadow-sm space-y-6 md:space-y-8">
+            <h3 className="text-lg md:text-xl font-black text-slate-900 flex items-center gap-2 md:gap-3">
+              <TrendingUp size={20} md={24} className="text-primary" /> Visualisasi Progres
             </h3>
             
-            <div className="h-[250px] w-full">
+            <div className="h-[200px] md:h-[250px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData}>
-                  <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8' }} />
+                  <XAxis dataKey="name" fontSize={9} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8' }} />
                   <YAxis hide domain={[0, 100]} />
                   <Tooltip cursor={{ fill: '#faf9f6', radius: 10 }} />
-                  <Bar dataKey="progress" radius={[10, 10, 0, 0]} barSize={32}>
+                  <Bar dataKey="progress" radius={[8, 8, 0, 0]} barSize={24} md={32}>
                     {chartData.map((_entry, index) => (
                       <Cell key={`cell-${index}`} fill={TAN_GRADIENT[index % TAN_GRADIENT.length]} />
                     ))}
@@ -327,44 +335,44 @@ export default function Tracker() {
               </ResponsiveContainer>
             </div>
 
-            <div className="space-y-6 pt-4 border-t border-tan-50">
+            <div className="space-y-4 md:space-y-6 pt-4 border-t border-tan-50">
                <AchievementItem 
-                 label="Target Tercapai" 
+                 label="Tercapai" 
                  value={`${targetTercapai}%`} 
-                 icon={<TrendingUp className="text-primary" />} 
+                 icon={<TrendingUp size={16} md={18} className="text-primary" />} 
                />
                <AchievementItem 
-                 label="Untaian Harian" 
+                 label="Streak" 
                  value={`${streak} Hari`} 
-                 icon={<Award className="text-amber-500" />} 
+                 icon={<Award size={16} md={18} className="text-amber-500" />} 
                />
                <AchievementItem 
-                 label="Buku Selesai" 
+                 label="Selesai" 
                  value={`${finishedBooksCount} Buku`} 
-                 icon={<CheckCircle className="text-emerald-500" />} 
+                 icon={<CheckCircle size={16} md={18} className="text-emerald-500" />} 
                />
             </div>
           </div>
 
-          <div className="bg-slate-900 p-10 rounded-[48px] text-white shadow-2xl relative overflow-hidden group">
-            <h3 className="text-xl font-black mb-8 flex items-center gap-3">
-              <Calendar size={22} className="text-primary" /> Pantau Progres
+          <div className="bg-slate-900 p-8 md:p-10 rounded-[32px] md:rounded-[48px] text-white shadow-2xl relative overflow-hidden">
+            <h3 className="text-lg md:text-xl font-black mb-6 md:mb-8 flex items-center gap-2 md:gap-3">
+              <Calendar size={18} md={22} className="text-primary" /> Riwayat Baca
             </h3>
-            <div className="text-center space-y-8">
-               <div className="grid grid-cols-7 gap-2 opacity-20">
+            <div className="text-center space-y-6 md:space-y-8">
+               <div className="grid grid-cols-7 gap-1.5 md:gap-2 opacity-20">
                  {Array.from({ length: 14 }).map((_, i) => (
-                   <div key={i} className="aspect-square rounded-lg bg-white" />
+                   <div key={i} className="aspect-square rounded-md md:rounded-lg bg-white" />
                  ))}
                </div>
-               <div className="space-y-4">
-                 <p className="text-slate-400 text-xs font-medium leading-relaxed">
-                   Lihat detail aktivitas harian dan bangun konsistensi membaca Anda.
+               <div className="space-y-3 md:space-y-4">
+                 <p className="text-slate-400 text-[10px] md:text-xs font-medium leading-relaxed italic">
+                   Buka kalender untuk melihat detail aktivitas harian Anda.
                  </p>
                  <button 
                    onClick={() => navigate('/app/user/calendar')}
-                   className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20"
+                   className="w-full py-3.5 md:py-4 bg-primary text-white rounded-xl md:rounded-2xl font-bold text-[10px] md:text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-primary/20"
                  >
-                   Buka Kalender
+                   Ke Kalender
                  </button>
                </div>
             </div>
@@ -378,9 +386,9 @@ export default function Tracker() {
 
 function StatMini({ label, value, color }: any) {
   return (
-    <div className="bg-white px-6 py-4 rounded-[28px] border border-tan-50 shadow-sm flex items-center gap-4">
-      <div className={`text-2xl font-black ${color}`}>{value}</div>
-      <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">{label}</div>
+    <div className="bg-white px-4 md:px-6 py-3 md:py-4 rounded-[20px] md:rounded-[28px] border border-tan-50 shadow-sm flex items-center gap-3 md:gap-4 shrink-0">
+      <div className={`text-xl md:text-2xl font-black ${color}`}>{value}</div>
+      <div className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">{label}</div>
     </div>
   );
 }
@@ -388,13 +396,13 @@ function StatMini({ label, value, color }: any) {
 function AchievementItem({ label, value, icon }: any) {
   return (
     <div className="flex items-center justify-between group cursor-default">
-      <div className="flex items-center gap-4">
-        <div className="w-10 h-10 rounded-xl bg-tan-50 flex items-center justify-center border border-primary/5 transition-transform group-hover:scale-110">
+      <div className="flex items-center gap-2 md:gap-4">
+        <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-tan-50 flex items-center justify-center border border-primary/5 transition-transform group-hover:scale-110">
           {icon}
         </div>
-        <span className="text-sm font-bold text-slate-500">{label}</span>
+        <span className="text-[11px] md:text-sm font-bold text-slate-500">{label}</span>
       </div>
-      <span className="text-sm font-black text-slate-900">{value}</span>
+      <span className="text-[11px] md:text-sm font-black text-slate-900">{value}</span>
     </div>
   );
 }

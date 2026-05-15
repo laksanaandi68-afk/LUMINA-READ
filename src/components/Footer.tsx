@@ -10,10 +10,8 @@ import {
   Facebook,
   Twitter,
   Instagram,
-  Music as Tiktok,
-  MessageSquare
+  Music as Tiktok
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Footer() {
@@ -73,7 +71,7 @@ export default function Footer() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 relative z-10">
             
             {/* Column 1: Branding */}
-            <div className="lg:col-span-5 space-y-8">
+            <div className="lg:col-span-8 space-y-8">
               <div className="flex items-center gap-4 group cursor-default">
                 <div className="w-14 h-14 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500">
                   <Shield className="text-white" size={28} />
@@ -105,7 +103,7 @@ export default function Footer() {
             </div>
 
             {/* Column 2: Links */}
-            <div className="lg:col-span-3 grid grid-cols-2 gap-4">
+            <div className="lg:col-span-4 grid grid-cols-2 gap-4">
               {linkGroups.map((group, i) => (
                 <div key={i} className="space-y-6">
                   <h3 className="text-sm font-bold text-white uppercase tracking-widest">{group.title}</h3>
@@ -124,26 +122,6 @@ export default function Footer() {
                   </ul>
                 </div>
               ))}
-            </div>
-
-            {/* Column 3: Contact Us */}
-            <div className="lg:col-span-4 space-y-6">
-              <h3 className="text-sm font-bold text-white uppercase tracking-widest">Hubungi Kami</h3>
-              <div className="bg-white/5 border border-white/10 rounded-3xl p-8 space-y-6 shadow-inner backdrop-blur-md relative group overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 opacity-[0.03] pointer-events-none group-hover:scale-110 transition-transform">
-                  <MessageSquare size={80} />
-                </div>
-                
-                <div className="space-y-4">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Hubungi Admin Langsung</p>
-                  <Link 
-                    to="/app/user/chat"
-                    className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-3 shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all hover:-translate-y-1 active:scale-95"
-                  >
-                    Mulai Live Chat <ChevronRight size={16} />
-                  </Link>
-                </div>
-              </div>
             </div>
 
           </div>

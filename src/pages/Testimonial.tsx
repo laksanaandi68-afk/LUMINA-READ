@@ -149,31 +149,7 @@ export default function Testimonial() {
   }
 
   return (
-    <div className="min-h-screen bg-[#faf9f6] selection:bg-primary/30">
-      {/* Standalone Header */}
-      <nav className="fixed top-0 w-full z-50 bg-white/70 backdrop-blur-lg border-b border-tan-100">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
-              <Compass className="text-white" size={22} />
-            </div>
-            <span className="text-2xl font-bold tracking-tight text-slate-900">LuminaRead</span>
-          </Link>
-          <div className="flex items-center gap-4">
-            {user ? (
-               <Link to="/app/user/dashboard" className="text-sm font-bold text-slate-600 hover:text-primary transition-all">
-                  Dashboard
-               </Link>
-            ) : (
-               <Link to="/login" className="bg-primary text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-xl shadow-primary/10 hover:bg-primary-dark transition-all">
-                 Masuk
-               </Link>
-            )}
-          </div>
-        </div>
-      </nav>
-
-      <div className="max-w-4xl mx-auto space-y-12 pb-20 pt-32 px-6 font-sans">
+    <div className="max-w-4xl mx-auto space-y-12 pb-20 px-6 font-sans">
       <header className="text-center space-y-4">
         <div className="w-20 h-20 bg-tan-50 rounded-[28px] flex items-center justify-center mx-auto text-primary shadow-sm border border-primary/5">
           <Heart size={40} className="fill-primary/10" />
@@ -367,7 +343,6 @@ export default function Testimonial() {
         </div>
       </section>
     </div>
-  </div>
-);
+  );
 }
 

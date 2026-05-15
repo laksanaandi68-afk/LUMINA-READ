@@ -1,14 +1,14 @@
 import React, { useState, useEffect, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, Users, ArrowRight, Coffee, ChevronDown, Star, Heart, MessageSquare, User, LogOut, Settings, Clock, Sun, Moon } from 'lucide-react';
+import { BookOpen, Users, ArrowRight, Coffee, ChevronDown, Star, Heart, MessageSquare, User, LogOut, Settings, Clock, Sun, Moon, Loader2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import Footer from '../components/Footer';
 
 export default function LandingPage() {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, logout } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState({ totalBooks: 0, totalUsers: 0 });
   const [onlineCount, setOnlineCount] = useState(1);
@@ -19,6 +19,11 @@ export default function LandingPage() {
   const [newMessage, setNewMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
+
+  useEffect(() => {
+    // Scroll to top on mount
+    window.scrollTo(0, 0);
+  }, []);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -149,7 +154,7 @@ export default function LandingPage() {
             online_at: new Date().toISOString(),
             user_id: user?.id || 'anon-' + Math.random().toString(36).substring(2, 11),
             role: profile?.role || 'visitor',
-            display_name: profile?.display_name || user?.email?.split('@')[0] || 'Visitor',
+            display_name: profile?.display_name || user?.email?.split('@')[0] || 'Pembaca',
             avatar_url: profile?.avatar_url || null
           });
         }
@@ -240,19 +245,22 @@ export default function LandingPage() {
           </div>
           <div className="flex items-center gap-4">
             {loading ? (
-              <div className="w-8 h-8 rounded-full border-2 border-tan-50 border-t-primary animate-spin mr-2"></div>
+              <div className="flex items-center gap-3 px-5 py-2 bg-tan-50/50 rounded-2xl border border-primary/5">
+                <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">MEMUAT</span>
+              </div>
             ) : user ? (
               <div className="flex items-center gap-3 p-1.5 pr-5 rounded-full border border-tan-100 bg-white shadow-sm relative z-[110]">
-                <Link to="/app/user/profile" className="w-10 h-10 rounded-full overflow-hidden shadow-sm flex items-center justify-center bg-tan-50 text-primary font-black shrink-0 hover:scale-105 transition-transform">
+                <Link to="/app/user/profile" className="w-10 h-10 rounded-full overflow-hidden shadow-sm flex items-center justify-center bg-tan-50 text-primary font-black shrink-0 hover:scale-105 transition-transform border border-primary/10">
                    {profile?.avatar_url ? (
                      <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
                    ) : (
-                     profile?.display_name?.[0] || user?.email?.[0]?.toUpperCase() || 'U'
+                     <User size={18} className="text-primary/40" />
                    )}
                 </Link>
                 <Link to={profile?.role === 'admin' ? "/app/admin/dashboard" : "/app/user/dashboard"} className="flex flex-col">
                    <span className="text-[13px] font-black text-slate-900 leading-tight">
-                     {profile?.display_name?.split(' ')[0] || user?.email?.split('@')[0] || 'User'}
+                     {profile?.display_name?.split(' ')[0] || user?.email?.split('@')[0] || 'Pembaca'}
                    </span>
                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
                      {profile?.role === 'admin' ? 'Admin Panel' : 'Dashboard'}
@@ -262,14 +270,7 @@ export default function LandingPage() {
                 <button 
                   type="button"
                   onClick={async () => {
-                    try {
-                      localStorage.clear();
-                      sessionStorage.clear();
-                      await supabase.auth.signOut();
-                      window.location.replace('/');
-                    } catch (err) {
-                      window.location.replace('/');
-                    }
+                    await logout();
                   }}
                   className="p-2 text-slate-300 hover:text-red-500 transition-colors group cursor-pointer"
                 >
@@ -279,9 +280,9 @@ export default function LandingPage() {
             ) : (
               <Link 
                 to="/login" 
-                className="bg-primary text-white px-8 py-3 rounded-2xl text-sm font-bold shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all hover:scale-105 active:scale-95"
+                className="bg-primary text-white px-8 py-3 rounded-2xl text-sm font-bold shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
               >
-                Mulai Sekarang
+                Masuk Sekarang <ArrowRight size={16} />
               </Link>
             )}
           </div>
@@ -304,7 +305,7 @@ export default function LandingPage() {
                 Menjelajah di <span className="text-primary italic">Setiap Bab</span>
               </h1>
               <p className="text-lg text-slate-500 mb-10 leading-relaxed max-w-xl mx-auto lg:mx-0">
-                Ruang hangat dan bebas gangguan untuk perpustakaan digital Anda. Lacak progres Anda, temukan rekomendasi berdasarkan suasana hati, dan bergabunglah dengan komunitas pecinta buku.
+                Ruang hangat dan bebas gangguan untuk perpustakaan digital Anda. Lacak progres Anda dan temukan rekomendasi berdasarkan suasana hati.
               </p>
               <div className="flex flex-col sm:flex-row items-center gap-8 justify-center lg:justify-start pt-4">
                 <Link 
@@ -380,15 +381,20 @@ export default function LandingPage() {
             <p className="text-slate-500 leading-relaxed font-medium">Langkah sederhana untuk meningkatkan pengalaman membaca Anda dan melaporkan masalah koleksi.</p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 relative">
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="grid grid-cols-1 md:grid-cols-4 gap-8 relative"
+          >
             <FlowStep number="01" title="Temukan" desc="Cari melalui perpustakaan digital kami yang berisi ribuan judul pilihan." />
             <FlowStep number="02" title="Lacak" desc="Catat progres harian Anda dan pertahankan rentetan membaca Anda." />
             <FlowStep number="03" title="Lapor" desc="Menemukan kesalahan dalam buku? Tandai langsung di tampilan bacaan Anda." />
             <FlowStep number="04" title="Selesaikan" desc="Admin kami memverifikasi dan memperbaiki masalah yang dilaporkan dalam 24 jam." />
             
             {/* Visual connector line for desktop */}
-            <div className="hidden md:block absolute top-[60px] left-[10%] right-[10%] h-px bg-tan-100 -z-10"></div>
-          </div>
+            <div className="hidden md:block absolute top-[40px] left-[10%] right-[10%] h-0.5 bg-tan-100 -z-10 bg-dashed"></div>
+          </motion.div>
         </div>
       </section>
 
@@ -399,23 +405,23 @@ export default function LandingPage() {
             <h2 className="text-3xl font-bold text-slate-900 mb-4">Fitur Utama Kami</h2>
             <p className="text-slate-600">Berbagai kemudahan dalam satu platform untuk meningkatkan kualitas membaca Anda.</p>
           </div>
-          <div className="grid md:grid-cols-3 gap-8">
+          <motion.div 
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="grid md:grid-cols-2 gap-8"
+          >
             <FeatureCard 
               icon={<BookOpen size={24} className="text-primary" />} 
               title="Koleksi Digital" 
               desc="Akses ribuan judul buku pilihan dari berbagai genre ternama." 
             />
             <FeatureCard 
-              icon={<Users size={24} className="text-primary" />} 
-              title="Komunitas" 
-              desc="Berdiskusi dan berbagi rekomendasi dengan pembaca lainnya." 
-            />
-            <FeatureCard 
               icon={<Star size={24} className="text-primary" />} 
               title="Progres Membaca" 
               desc="Lacak detail harian Anda dan capai target membaca bulanan." 
             />
-          </div>
+          </motion.div>
         </div>
       </section>
 

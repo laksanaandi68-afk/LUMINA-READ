@@ -49,7 +49,36 @@ export default function BookDetails() {
   const [newQuote, setNewQuote] = useState({ content: '', author_name: '' });
 
   useEffect(() => {
+    if (!id) return;
+    
     fetchBookData();
+
+    // Re-fetch when anything changes
+    const syncChannel = supabase
+      .channel(`book_details_sync_${id}`)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'books',
+        filter: `id=eq.${id}`
+      }, fetchBookData)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'reviews',
+        filter: `book_id=eq.${id}`
+      }, fetchBookData)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'bookmarks',
+        filter: `book_id=eq.${id}`
+      }, fetchBookData)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(syncChannel);
+    };
   }, [id, user?.id]);
 
   const fetchBookData = async () => {
@@ -187,21 +216,21 @@ export default function BookDetails() {
   );
 
   return (
-    <div className="max-w-5xl mx-auto space-y-12 pb-32">
+    <div className="max-w-5xl mx-auto space-y-8 md:space-y-12 pb-32 px-1">
       {/* Back & Actions */}
-      <div className="flex items-center justify-between px-2">
-         <button onClick={() => navigate('/app/user/library')} className="flex items-center gap-2 text-slate-400 hover:text-primary font-bold text-sm transition-all group">
-            <ChevronLeft className="group-hover:-translate-x-1 transition-transform" /> Kembali ke Koleksi
+      <div className="flex items-center justify-between gap-4">
+         <button onClick={() => navigate('/app/user/library')} className="flex items-center gap-2 text-slate-400 hover:text-primary font-bold text-xs md:text-sm transition-all group shrink-0">
+            <ChevronLeft size={16} md={20} className="group-hover:-translate-x-1 transition-transform" /> <span className="hidden sm:inline">Koleksi</span>
          </button>
-         <div className="flex gap-4">
+         <div className="flex gap-2 md:gap-4 ml-auto">
             <ActionButton 
-              icon={<Heart size={20} fill={isBookmarked ? 'currentColor' : 'none'} />} 
+              icon={<Heart size={16} md={20} fill={isBookmarked ? 'currentColor' : 'none'} />} 
               label={isBookmarked ? 'Tersimpan' : 'Favorit'} 
               onClick={handleToggleBookmark} 
               color={isBookmarked ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' : 'bg-white border-tan-50 text-slate-400 hover:text-primary'}
             />
             <ActionButton 
-              icon={<Quote size={20} />} 
+              icon={<Quote size={16} md={20} />} 
               label="Kutipan" 
               onClick={() => setShowQuoteModal(true)} 
               color="bg-white border-tan-50 text-slate-400 hover:text-indigo-500"
@@ -210,73 +239,73 @@ export default function BookDetails() {
       </div>
 
       {/* Main Info Card */}
-      <section className="bg-white rounded-[48px] p-10 md:p-16 border border-tan-50 shadow-sm relative overflow-hidden">
-         <div className="flex flex-col md:flex-row gap-12 md:gap-20 relative z-10">
+      <section className="bg-white rounded-[32px] md:rounded-[48px] p-6 md:p-16 border border-tan-50 shadow-sm relative overflow-hidden">
+         <div className="flex flex-col md:flex-row gap-8 md:gap-20 relative z-10">
             <motion.div 
-               initial={{ opacity: 0, x: -30 }}
-               animate={{ opacity: 1, x: 0 }}
+               initial={{ opacity: 0, scale: 0.95 }}
+               animate={{ opacity: 1, scale: 1 }}
                className="w-full md:w-80 shrink-0"
             >
-               <div className="aspect-[3/4.2] rounded-[40px] overflow-hidden shadow-2xl border-4 border-white transform hover:rotate-3 transition-transform duration-700">
+               <div className="aspect-[3/4.2] w-full max-w-[240px] md:max-w-none mx-auto rounded-[24px] md:rounded-[40px] overflow-hidden shadow-2xl border-4 border-white">
                   <img src={book.cover_url || 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=400'} alt={book.title} className="w-full h-full object-cover" />
                </div>
                
-               <div className="mt-12 grid grid-cols-2 gap-4">
-                  <div className="p-5 bg-tan-50/50 rounded-3xl border border-tan-50 text-center">
-                     <Bookmark size={20} className="text-orange-400 mx-auto mb-2" fill="currentColor" />
-                     <p className="text-xl font-black text-slate-900 leading-none">{book.status || 'Aktif'}</p>
-                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Status</p>
+               <div className="mt-8 md:mt-12 grid grid-cols-2 gap-3 md:gap-4">
+                  <div className="p-4 md:p-5 bg-tan-50/50 rounded-2xl md:rounded-3xl border border-tan-50 text-center">
+                     <Bookmark size={16} md={20} className="text-orange-400 mx-auto mb-1 md:mb-2" fill="currentColor" />
+                     <p className="text-sm md:text-xl font-black text-slate-900 leading-none truncate px-1">{book.status || 'Aktif'}</p>
+                     <p className="text-[8px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Status</p>
                   </div>
-                  <div className="p-5 bg-tan-50/50 rounded-3xl border border-tan-50 text-center">
-                     <Layers size={20} className="text-indigo-400 mx-auto mb-2" />
-                     <p className="text-xl font-black text-slate-900 leading-none">{book.total_pages || '?'}</p>
-                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Halaman</p>
+                  <div className="p-4 md:p-5 bg-tan-50/50 rounded-2xl md:rounded-3xl border border-tan-50 text-center">
+                     <Layers size={16} md={20} className="text-indigo-400 mx-auto mb-1 md:mb-2" />
+                     <p className="text-sm md:text-xl font-black text-slate-900 leading-none">{book.total_pages || '?'}</p>
+                     <p className="text-[8px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Halaman</p>
                   </div>
                </div>
             </motion.div>
 
             <motion.div 
-               initial={{ opacity: 0, x: 30 }}
-               animate={{ opacity: 1, x: 0 }}
-               className="flex-1 space-y-8"
+               initial={{ opacity: 0, y: 30 }}
+               animate={{ opacity: 1, y: 0 }}
+               className="flex-1 space-y-6 md:space-y-8 text-center md:text-left"
             >
-               <div className="space-y-4">
-                  <span className="px-5 py-1.5 bg-primary/10 text-primary rounded-full text-[10px] font-black uppercase tracking-[0.2em] border border-primary/10">
+               <div className="space-y-3 md:space-y-4">
+                  <span className="inline-block px-4 py-1 bg-primary/10 text-primary rounded-full text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] border border-primary/10">
                      {book.genre}
                   </span>
-                  <h1 className="text-5xl font-black text-slate-900 tracking-tight leading-none">{book.title}</h1>
-                  <p className="text-xl text-slate-400 font-bold italic">Oleh {book.author}</p>
+                  <h1 className="text-2xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight">{book.title}</h1>
+                  <p className="text-sm md:text-xl text-slate-400 font-bold italic">Oleh {book.author}</p>
                </div>
 
-               <div className="flex gap-10 border-y border-tan-50 py-8">
-                  <div className="flex items-center gap-3">
-                     <div className="w-10 h-10 rounded-xl bg-tan-50 flex items-center justify-center text-primary"><Layers size={18} /></div>
-                     <div>
-                        <p className="text-xs font-black text-slate-900">{(book.total_pages || 100)} Halaman</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">Volume</p>
+               <div className="flex justify-center md:justify-start gap-6 md:gap-10 border-y border-tan-50 py-6 md:py-8">
+                  <div className="flex items-center gap-2 md:gap-3">
+                     <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-tan-50 flex items-center justify-center text-primary"><Layers size={14} md={18} /></div>
+                     <div className="text-left">
+                        <p className="text-[10px] md:text-xs font-black text-slate-900">{(book.total_pages || 100)} Halaman</p>
+                        <p className="text-[8px] md:text-[10px] font-bold text-slate-400 uppercase">Volume</p>
                      </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                     <div className="w-10 h-10 rounded-xl bg-tan-50 flex items-center justify-center text-primary"><BookOpen size={18} /></div>
-                     <div>
-                        <p className="text-xs font-black text-slate-900">{book.status || 'Belum Dimulai'}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">Status</p>
+                  <div className="flex items-center gap-2 md:gap-3">
+                     <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-tan-50 flex items-center justify-center text-primary"><BookOpen size={14} md={18} /></div>
+                     <div className="text-left">
+                        <p className="text-[10px] md:text-xs font-black text-slate-900">{book.status || 'Belum Dimulai'}</p>
+                        <p className="text-[8px] md:text-[10px] font-bold text-slate-400 uppercase">Status</p>
                      </div>
                   </div>
                </div>
 
-               <div className="space-y-4">
-                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Tentang perjalanan ini</h3>
-                  <p className="text-slate-500 leading-relaxed font-medium text-lg italic">
+               <div className="space-y-3 md:space-y-4">
+                  <h3 className="text-[10px] md:text-sm font-black text-slate-900 uppercase tracking-widest">Sinopsis</h3>
+                  <p className="text-slate-500 leading-relaxed font-medium text-sm md:text-lg italic px-2 md:px-0">
                      {book.synopsis || "Sinopsis tidak tersedia untuk judul ini. Larutkan diri Anda dalam cerita untuk menemukan keajaibannya."}
                   </p>
                </div>
 
                <button 
                   onClick={() => navigate('/app/user/tracker')}
-                  className="flex items-center justify-center gap-3 w-full py-6 bg-slate-900 text-white rounded-[32px] font-black text-lg hover:scale-105 transition-all shadow-2xl shadow-slate-200"
+                  className="flex items-center justify-center gap-3 w-full py-4 md:py-6 bg-slate-900 text-white rounded-2xl md:rounded-[32px] font-black text-base md:text-lg hover:bg-slate-800 transition-all shadow-xl md:shadow-2xl shadow-slate-200 active:scale-[0.98]"
                >
-                  <BookOpen size={24} /> Buka Pelacak Bacaan
+                  <BookOpen size={20} md={24} /> Buka Pelacak
                </button>
             </motion.div>
          </div>
@@ -284,20 +313,20 @@ export default function BookDetails() {
       </section>
 
       {/* Private Journal Section */}
-      <section className="space-y-10">
-         <div className="flex items-center justify-between px-2">
+      <section className="space-y-8 md:space-y-10">
+         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 md:gap-4 px-2">
             <div className="flex items-center gap-4">
-               <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-primary shadow-sm border border-tan-50"><MessageSquare size={24} /></div>
+               <div className="w-10 h-10 md:w-12 md:h-12 bg-white rounded-xl md:rounded-2xl flex items-center justify-center text-primary shadow-sm border border-tan-50 shrink-0"><MessageSquare size={20} md={24} /></div>
                <div>
-                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Catatan Membaca Saya ✍️</h2>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Jurnal Pribadi & Rahasia</p>
+                  <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">Catatan Saya ✍️</h2>
+                  <p className="text-[8px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest">Jurnal Pribadi & Rahasia</p>
                </div>
             </div>
             <Link 
                to={`/app/user/book/${id}`}
-               className="px-8 py-3 bg-white border border-tan-50 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-3 shadow-sm hover:translate-y-[-2px]"
+               className="w-full md:w-auto px-6 md:px-8 py-3 bg-white border border-tan-50 text-slate-900 rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center justify-center gap-3 shadow-sm"
             >
-               {personalReview ? 'Perbarui Catatan' : 'Mulai Menulis'} <Plus size={18} />
+               {personalReview ? 'Perbarui' : 'Menulis'} <Plus size={16} md={18} />
             </Link>
          </div>
 
@@ -305,60 +334,60 @@ export default function BookDetails() {
             <motion.div 
                initial={{ opacity: 0, y: 20 }}
                animate={{ opacity: 1, y: 0 }}
-               className="bg-white p-12 rounded-[56px] border border-tan-50 shadow-2xl shadow-tan-100/20 relative overflow-hidden"
+               className="bg-white p-6 md:p-12 rounded-[32px] md:rounded-[56px] border border-tan-50 shadow-2xl shadow-tan-100/20 relative overflow-hidden"
             >
-               <div className="relative z-10 space-y-10">
+               <div className="relative z-10 space-y-6 md:space-y-10">
                   <div className="flex items-center justify-between">
-                     <div className="flex gap-1.5">
+                     <div className="flex gap-1">
                         {[...Array(5)].map((_, i) => (
                            <Star 
                               key={i} 
-                              size={24} 
+                              size={18} md={24} 
                               className={i < personalReview.rating ? 'text-orange-400' : 'text-slate-100'} 
                               fill={i < personalReview.rating ? 'currentColor' : 'none'} 
                            />
                         ))}
                      </div>
                      {personalReview.mood && (
-                        <div className="px-5 py-2 bg-slate-50 rounded-2xl border border-tan-50 flex items-center gap-3">
-                           <span className="text-2xl">{personalReview.mood}</span>
-                           <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-l border-tan-100 pl-3">Mood</span>
+                        <div className="px-3 md:px-5 py-1.5 md:py-2 bg-slate-50 rounded-xl md:rounded-2xl border border-tan-50 flex items-center gap-2 md:gap-3">
+                           <span className="text-lg md:text-2xl">{personalReview.mood}</span>
+                           <span className="text-[8px] md:text-[10px] font-black uppercase text-slate-400 tracking-widest border-l border-tan-100 pl-2 md:pl-3">Mood</span>
                         </div>
-                     )}
+                      )}
                   </div>
 
-                  <div className="space-y-6">
-                     <Quote className="text-primary/20" size={48} />
-                     <p className="text-3xl font-medium text-slate-800 leading-relaxed font-serif italic selection:bg-primary/20">
+                  <div className="space-y-4 md:space-y-6">
+                     <Quote className="text-primary/20" size={32} md={48} />
+                     <p className="text-lg md:text-3xl font-medium text-slate-800 leading-relaxed font-serif italic selection:bg-primary/20">
                         {personalReview.comment}
                      </p>
                   </div>
 
-                  <div className="pt-10 border-t border-tan-50 flex items-center justify-between">
-                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-tan-50 border-2 border-white shadow-sm overflow-hidden">
+                  <div className="pt-6 md:pt-10 border-t border-tan-50 flex items-center justify-between">
+                     <div className="flex items-center gap-3 md:gap-4">
+                        <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-tan-50 border-2 border-white shadow-sm overflow-hidden shrink-0">
                            <img src={profile?.avatar_url || `https://i.pravatar.cc/100?u=${user?.id}`} alt="" className="w-full h-full object-cover" />
                         </div>
-                        <p className="text-xs font-black text-slate-900">{profile?.display_name || 'Membaca...'}</p>
+                        <p className="text-[10px] md:text-xs font-black text-slate-900 truncate max-w-[120px]">{profile?.display_name || 'User'}</p>
                      </div>
-                     <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Dibuat: {new Date(personalReview.created_at).toLocaleDateString('id-ID')}</p>
+                     <p className="text-[8px] md:text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">{new Date(personalReview.created_at).toLocaleDateString('id-ID')}</p>
                   </div>
                </div>
-               <Heart className="absolute -right-20 -bottom-20 text-primary/[0.03] rotate-12" size={320} />
+               <Heart className="absolute -right-10 -bottom-10 md:-right-20 md:-bottom-20 text-primary/[0.03] rotate-12" size={160} md={320} />
             </motion.div>
          ) : (
-            <div className="bg-white p-20 rounded-[56px] border-2 border-dashed border-tan-100 text-center space-y-8">
-               <div className="w-24 h-24 bg-tan-50 rounded-full flex items-center justify-center mx-auto text-slate-200 group-hover:scale-110 transition-transform">
-                  <Heart size={48} />
+            <div className="bg-white p-10 md:p-20 rounded-[32px] md:rounded-[56px] border-2 border-dashed border-tan-100 text-center space-y-6 md:space-y-8">
+               <div className="w-16 h-16 md:w-24 md:h-24 bg-tan-50 rounded-full flex items-center justify-center mx-auto text-slate-200">
+                  <Heart size={32} md={48} />
                </div>
-               <div className="max-w-md mx-auto space-y-4">
-                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Perjalanan Anda belum dicatat</h3>
-                  <p className="text-slate-400 font-medium pb-4">Tuliskan pesan moral, kutipan favorit, atau sekadar perasaan Anda setelah membaca buku ini. Catatan ini hanya milik Anda.</p>
+               <div className="max-w-md mx-auto space-y-3 md:space-y-4">
+                  <h3 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight leading-tight">Belum Ada Catatan</h3>
+                  <p className="text-slate-400 font-medium text-xs md:text-base pb-2 md:pb-4 leading-relaxed">Tuliskan kesan, pesan, atau sekadar kutipan favorit dari buku ini sebagai kenangan pribadi.</p>
                   <Link 
                      to={`/app/user/book/${id}`}
-                     className="px-12 py-5 bg-primary text-white rounded-3xl font-black text-sm uppercase tracking-widest hover:scale-105 transition-all shadow-2xl shadow-primary/20 inline-block"
+                     className="px-8 md:px-12 py-4 md:py-5 bg-primary text-white rounded-2xl md:rounded-3xl font-black text-[10px] md:text-sm uppercase tracking-widest hover:scale-105 transition-all shadow-xl md:shadow-2xl shadow-primary/20 inline-block"
                   >
-                     Tulis Catatan Sekarang
+                     Tulis Sekarang
                   </Link>
                </div>
             </div>
@@ -440,11 +469,11 @@ function ActionButton({ icon, label, onClick, color }: any) {
 
 function Modal({ title, children, onClose }: any) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6">
        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
-       <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative z-10 w-full max-w-md bg-white rounded-[40px] p-10 shadow-3xl border border-tan-50 space-y-8">
+       <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative z-10 w-full max-w-md bg-white rounded-[32px] md:rounded-[40px] p-6 md:p-10 shadow-3xl border border-tan-50 space-y-6 md:space-y-8 max-h-[90vh] overflow-y-auto">
           <div className="flex justify-between items-center">
-             <h3 className="text-xl font-black text-slate-900 tracking-tight">{title}</h3>
+             <h3 className="text-lg md:text-xl font-black text-slate-900 tracking-tight">{title}</h3>
              <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-full transition-colors"><X size={20} /></button>
           </div>
           {children}

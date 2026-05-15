@@ -16,7 +16,7 @@ interface Reminder {
 interface AppNotification {
   id: string;
   user_id: string;
-  type: 'friend_request' | 'friend_accepted' | 'new_message' | 'system';
+  type: 'system' | 'reminder';
   title: string;
   content: string;
   data?: any;
@@ -27,11 +27,13 @@ interface AppNotification {
 interface NotificationContextType {
   reminders: Reminder[];
   notifications: AppNotification[];
+  activeToasts: any[];
   unreadCount: number;
   fetchReminders: () => Promise<void>;
   fetchNotifications: () => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  removeToast: (id: string) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -40,6 +42,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const { user, profile } = useAuth();
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [activeToasts, setActiveToasts] = useState<any[]>([]);
+
+  const removeToast = (id: string) => {
+    setActiveToasts(current => current.filter(t => t.id !== id));
+  };
 
   const fetchReminders = useCallback(async () => {
     if (!user) return;
@@ -111,42 +118,65 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // Real-time synchronization
   useEffect(() => {
-    if (!user || !profile) return;
+    if (!user || !profile) {
+      setReminders([]);
+      setNotifications([]);
+      setActiveToasts([]);
+      return;
+    }
 
     fetchReminders();
     fetchNotifications();
 
-    const remindersChannel = supabase
-      .channel('reminders_realtime')
+    const syncChannel = supabase
+      .channel(`notif_sync_${profile.id}`)
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
         table: 'reminders',
         filter: `user_id=eq.${user.id}`
       }, () => fetchReminders())
-      .subscribe();
-
-    const notificationsChannel = supabase
-      .channel(`notifications_realtime_${profile.id}`)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'notifications',
         filter: `user_id=eq.${profile.id}`
-      }, (payload) => {
-        setNotifications(prev => [payload.new as AppNotification, ...prev].slice(0, 20));
+      }, async (payload) => {
+        const notif = payload.new as AppNotification;
+        setNotifications(prev => [notif, ...prev].slice(0, 20));
         
-        // Show toast for new notification
-        Swal.fire({
-          title: (payload.new as AppNotification).title,
-          text: (payload.new as AppNotification).content,
-          icon: 'info',
-          toast: true,
-          position: 'top-end',
-          showConfirmButton: false,
-          timer: 3000,
-          timerProgressBar: true
-        });
+        // Fetch sender details if needed for the toast
+        let senderInfo = { avatar_url: undefined, display_name: undefined };
+        if (notif.data?.sender_id) {
+          const { data: sData } = await supabase
+            .from('profiles')
+            .select('avatar_url, display_name')
+            .eq('id', notif.data.sender_id)
+            .single();
+          if (sData) {
+            senderInfo.avatar_url = sData.avatar_url;
+            senderInfo.display_name = sData.display_name;
+          }
+        }
+
+        // Push to active toasts
+        setActiveToasts(current => [{
+          id: notif.id,
+          type: notif.type,
+          title: notif.title,
+          content: notif.content,
+          avatar_url: senderInfo.avatar_url || notif.data?.avatar_url,
+          sender_name: senderInfo.display_name || notif.data?.sender_name,
+          data: notif.data
+        }, ...current].slice(0, 5));
+
+        // Browser Native Notification
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification(notif.title, {
+            body: notif.content,
+            icon: '/favicon.ico'
+          });
+        }
       })
       .on('postgres_changes', {
         event: 'UPDATE',
@@ -157,8 +187,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       .subscribe();
 
     return () => {
-      supabase.removeChannel(remindersChannel);
-      supabase.removeChannel(notificationsChannel);
+      supabase.removeChannel(syncChannel);
     };
   }, [user, profile, fetchReminders, fetchNotifications]);
 
@@ -174,29 +203,38 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         
         // If scheduled time has reached or passed, and not yet notified
         if (now >= scheduledTime && !reminder.is_notified) {
-          // Trigger notification
-          Swal.fire({
-            title: `🔔 Ingat: ${reminder.title}`,
-            text: reminder.description || 'Saatnya beraktivitas!',
-            icon: 'info',
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: true,
-            confirmButtonText: 'Oke',
-            timer: 10000,
-            timerProgressBar: true,
-          });
+          // 1. Create a persistent notification record
+          const { data: newNotif, error: notifError } = await supabase
+            .from('notifications')
+            .insert([{
+              user_id: user.id,
+              type: 'reminder',
+              title: `Pengingat: ${reminder.title}`,
+              content: reminder.description || 'Waktunya sesuai jadwal Anda!',
+              data: { reminder_id: reminder.id },
+              is_read: false
+            }])
+            .select()
+            .single();
 
-          // Play a soft sound if possible (optional, maybe too complex for now)
-          
-          // Update notified status in DB
+          if (notifError) console.error("Error creating persistence for reminder:", notifError);
+
+          // 2. Browser Native Notification (Optional enrichment)
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification(`🔔 ${reminder.title}`, {
+              body: reminder.description || 'Waktunya sesuai jadwal Anda!',
+              icon: '/favicon.ico'
+            });
+          }
+            
+          // 3. Update notified status in DB
           try {
             await supabase
               .from('reminders')
               .update({ is_notified: true, status: 'ongoing' })
               .eq('id', reminder.id);
             
-            // Local state update will be handled by fetchReminders via real-time channel
+            // fetchReminders() and fetchNotifications() will be updated via realtime channels
           } catch (err) {
             console.error("Error updating reminder status:", err);
           }
@@ -207,15 +245,24 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     return () => clearInterval(interval);
   }, [user, reminders]);
 
+  // Browser Notification Permission Request
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
   return (
     <NotificationContext.Provider value={{ 
       reminders, 
       notifications, 
+      activeToasts,
       unreadCount, 
       fetchReminders, 
       fetchNotifications, 
       markAsRead, 
-      markAllAsRead 
+      markAllAsRead,
+      removeToast
     }}>
       {children}
     </NotificationContext.Provider>

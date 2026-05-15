@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { BookOpen, Mail, Lock, User as UserIcon, ArrowRight, Phone, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Swal from 'sweetalert2';
 
 export default function LoginPage() {
+  const { user, profile, logout } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -26,30 +28,17 @@ export default function LoginPage() {
   const isConfigMissing = !import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   React.useEffect(() => {
-    if (supabase.auth) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-          // If session exists but we are on login page, 
-          // maybe the profile is missing? Let's check.
-          supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle()
-            .then(({ data }) => {
-              if (data) {
-                navigate(data.role === 'admin' ? '/app/admin/dashboard' : '/app/user/dashboard');
-              }
-            });
-        }
-      });
+    if (user) {
+      const timer = setTimeout(() => {
+        const role = profile?.role || (user.email === 'admin@gmail.com' ? 'admin' : 'user');
+        navigate(role === 'admin' ? '/app/admin/dashboard' : '/app/user/dashboard', { replace: true });
+      }, 800);
+      return () => clearTimeout(timer);
     }
-  }, [navigate]);
+  }, [user, profile, navigate]);
 
   const handleLogout = async () => {
-    try {
-      setLoading(true);
-      await supabase.auth.signOut();
-      window.location.href = '/';
-    } catch (err) {
-      window.location.href = '/';
-    }
+    await logout();
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -63,26 +52,41 @@ export default function LoginPage() {
 
     setLoading(true);
 
+    // Fail-safe: Reset loading if it takes too long (> 10s)
+    const timeout = setTimeout(() => {
+      if (loading) {
+        setLoading(false);
+        Swal.fire({
+          icon: 'warning',
+          title: 'Waktu Habis',
+          text: 'Proses login memakan waktu terlalu lama. Periksa koneksi internet Anda atau coba segarkan halaman.',
+        });
+      }
+    }, 10000);
+
     try {
       // Basic config validation
       const url = import.meta.env.VITE_SUPABASE_URL || '';
       if (!url.startsWith('https://')) {
+        clearTimeout(timeout);
         throw new Error('Konfigurasi Supabase tidak valid. Pastikan VITE_SUPABASE_URL benar.');
       }
+
+      const cleanEmail = email.trim();
 
       if (isLogin) {
         // =====================
         // LOGIN PROCESS
         // =====================
-        console.log("Starting login for:", email);
+        console.log("LoginPage: Attempting login for", cleanEmail);
         const { data, error } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
+          email: cleanEmail,
+          password: password,
         });
 
-        console.log("Login response received:", { userId: data?.user?.id, error });
-
+        clearTimeout(timeout);
         if (error) {
+          console.error("LoginPage: Login error", error);
           setLoading(false); 
           if (error.message.includes('Invalid login credentials')) {
             throw new Error('Email atau password salah. Jika Anda baru, silakan DAFTAR terlebih dahulu.');
@@ -92,23 +96,29 @@ export default function LoginPage() {
           throw error;
         }
 
-        if (data.user) {
-          // Success! Navigate IMMEDIATELY
-          // Don't await profile check, let the dashboard handle it
+        if (data?.user) {
+          console.log("LoginPage: Login success for", data.user.id);
+          
           setLoading(false);
+          clearTimeout(timeout);
           
-          const userRole = email === 'admin@gmail.com' ? 'admin' : 'user';
+          const isActuallyAdmin = cleanEmail === 'admin@gmail.com' || data.user.email === 'admin@gmail.com';
+          const targetPath = isActuallyAdmin ? '/app/admin/dashboard' : '/app/user/dashboard';
           
-          // Show quick toast instead of blocking Swal
           Swal.fire({
             icon: 'success',
             title: 'Berhasil Masuk',
-            timer: 800,
+            text: 'Mengarahkan ke Dashboard...',
+            timer: 1000,
             showConfirmButton: false,
             position: 'center',
           });
 
-          navigate(userRole === 'admin' ? '/app/admin/dashboard' : '/app/user/dashboard', { replace: true });
+          console.log("LoginPage: Navigating to", targetPath);
+          navigate(targetPath, { replace: true });
+        } else {
+          // Fallback if no user and no error (shouldn't happen)
+          setLoading(false);
         }
       } else {
         // =====================
@@ -130,12 +140,15 @@ export default function LoginPage() {
         console.log("Signup response received:", { userId: data?.user?.id, session: !!data.session, error });
 
         if (error) {
+          console.error("LoginPage: Signup error", error);
           setLoading(false);
+          clearTimeout(timeout);
           throw error;
         }
 
         // Success: Stop loading now so user can interact with messages
         setLoading(false);
+        clearTimeout(timeout);
 
         if (data.session === null) {
           await Swal.fire({

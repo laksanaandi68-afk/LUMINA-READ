@@ -75,17 +75,16 @@ export default function AdminDashboard() {
 
   const fetchStats = async () => {
     try {
-      const [users, books, chats, reports, pending] = await Promise.all([
+      const [users, books, reports, pending] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
         supabase.from('books').select('*', { count: 'exact', head: true }),
-        supabase.from('messages').select('*', { count: 'exact', head: true }),
         supabase.from('reports').select('*', { count: 'exact', head: true }),
         supabase.from('reports').select('*', { count: 'exact', head: true }).eq('status', 'pending')
       ]);
       setStats({
         totalUsers: users.count || 0,
         totalBooks: books.count || 0,
-        totalChats: chats.count || 0,
+        totalChats: 0,
         totalReports: reports.count || 0,
         pendingReports: pending.count || 0
       });
@@ -105,7 +104,7 @@ export default function AdminDashboard() {
       
       setActivities(data?.map(t => ({
         id: t.id,
-        user: t.profiles?.display_name || 'Pembaca Anonim',
+        user: t.profiles?.display_name || 'Pembaca',
         content: `Membaca "${t.books?.title || 'Buku'}"`,
         created_at: t.updated_at
       })) || []);
@@ -202,10 +201,8 @@ export default function AdminDashboard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 font-sans">
          <MetricBlock icon={User} label="TOTAL PENGGUNA" value={stats.totalUsers} sub="Pengguna Terdaftar" />
-         <Link to="/app/admin/chat">
-           <MetricBlock icon={MessageCircle} label="TOTAL CHAT" value={stats.totalChats} sub="Sinyal Komunikasi" />
-         </Link>
-         <MetricBlock icon={ShieldAlert} label="TOTAL LAPORAN" value={stats.totalReports} sub="Aduan Komunitas" />
+         <MetricBlock icon={Library} label="TOTAL BUKU" value={stats.totalBooks} sub="Koleksi Aktif" />
+         <MetricBlock icon={ShieldAlert} label="TOTAL LAPORAN" value={stats.totalReports} sub="Aduan Sistem" />
          <Link to="/app/admin/reports" className="block">
             <div className={`p-8 rounded-[40px] border shadow-xl relative group overflow-hidden h-full transition-all ${stats.pendingReports > 0 ? 'bg-rose-500 border-rose-400' : 'bg-slate-900 border-slate-800'}`}>
               <div className="relative z-10 h-full flex flex-col justify-between">

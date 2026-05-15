@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 export default function Dashboard() {
   const { user, profile } = useAuth();
-  const { reminders } = useNotifications();
+  const { reminders, fetchReminders } = useNotifications();
   const navigate = useNavigate();
   const [stats, setStats] = useState({ 
     booksFinished: 0, 
@@ -106,8 +106,26 @@ export default function Dashboard() {
 
     fetchDashboardData();
 
-    const channel = supabase
-      .channel(`dashboard_updates_${user.id}`)
+    const syncChannel = supabase
+      .channel(`dashboard_sync_${user.id}`)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'reminders',
+        filter: `user_id=eq.${user.id}`
+      }, () => fetchReminders())
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'bookmarks',
+        filter: `user_id=eq.${user.id}`
+      }, fetchDashboardData)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'reading_logs',
+        filter: `user_id=eq.${user.id}`
+      }, fetchDashboardData)
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
@@ -118,7 +136,7 @@ export default function Dashboard() {
 
     return () => {
       isMounted = false;
-      supabase.removeChannel(channel);
+      supabase.removeChannel(syncChannel);
     };
   }, [user?.id, profile?.daily_target]);
 
@@ -140,51 +158,51 @@ export default function Dashboard() {
     : 0;
 
   return (
-    <div className="space-y-12 pb-20 font-sans">
+    <div className="space-y-8 md:space-y-12 pb-16 md:pb-20 font-sans overflow-x-hidden">
       {/* Personalized Welcome */}
-      <section className="px-2">
-        <h2 className="text-4xl font-black text-slate-900 tracking-tight">
+      <section className="px-1 md:px-2">
+        <h2 className="text-2xl md:text-4xl font-black text-slate-900 tracking-tight leading-tight">
           Halo, <span className="text-primary">{displayName}!</span> ✨
         </h2>
-        <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.3em] mt-3">
+        <p className="text-slate-400 font-bold text-[9px] md:text-xs uppercase tracking-[0.2em] mt-2 md:mt-3">
           {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
       </section>
 
       {/* Aesthetic Featured Section: Currently Reading */}
-      <section className="bg-white rounded-[48px] p-12 shadow-sm border border-tan-50 flex flex-col lg:flex-row items-center justify-between overflow-hidden relative min-h-[400px]">
-        <div className="relative z-10 max-w-xl w-full">
+      <section className="bg-white rounded-[32px] md:rounded-[48px] p-6 md:p-12 shadow-sm border border-tan-50 flex flex-col lg:flex-row items-center justify-between overflow-hidden relative min-h-auto md:min-h-[400px]">
+        <div className="relative z-10 max-w-xl w-full text-center lg:text-left">
           <div>
-            <span className="px-5 py-2 bg-tan-50 text-primary rounded-full text-[11px] font-black uppercase tracking-widest border border-primary/10">
+            <span className="px-4 md:px-5 py-1.5 md:py-2 bg-tan-50 text-primary rounded-full text-[9px] md:text-[11px] font-black uppercase tracking-widest border border-primary/10">
               Sedang Dibaca
             </span>
             
             {currentlyReading ? (
               <>
-                <h1 className="text-4xl md:text-5xl font-black mt-8 mb-6 text-slate-900 tracking-tight leading-tight">
+                <h1 className="text-3xl md:text-5xl font-black mt-6 md:mt-8 mb-4 md:mb-6 text-slate-900 tracking-tight leading-tight line-clamp-2">
                   {currentlyReading.title}
                 </h1>
-                <p className="text-slate-500 leading-relaxed line-clamp-2 mb-10 text-lg font-medium italic">
+                <p className="text-slate-500 leading-relaxed line-clamp-3 md:line-clamp-2 mb-8 md:mb-10 text-base md:text-lg font-medium italic px-2 md:px-0">
                   "{currentlyReading.synopsis || "Sinopsis tidak tersedia untuk buku ini."}"
                 </p>
                 
-                <div className="space-y-8">
-                  <div className="flex flex-col sm:flex-row items-center gap-6">
+                <div className="space-y-6 md:space-y-8">
+                  <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 md:gap-6">
                     <Link 
                       to={`/app/user/book/${currentlyReading.id}`} 
-                      className="w-full sm:w-auto px-10 py-5 bg-primary text-white rounded-[24px] font-black shadow-2xl shadow-primary/20 hover:scale-105 transition-all text-sm flex items-center justify-center gap-3 whitespace-nowrap"
+                      className="w-full sm:w-auto px-8 md:px-10 py-4 md:py-5 bg-primary text-white rounded-[20px] md:rounded-[24px] font-black shadow-xl shadow-primary/20 hover:scale-105 transition-all text-xs md:text-sm flex items-center justify-center gap-3 whitespace-nowrap"
                     >
-                      Catatan Membaca Saya ✍️ <Heart size={20} fill="currentColor" />
+                      Buka Catatan <Heart size={18} fill="currentColor" />
                     </Link>
                   </div>
                 </div>
               </>
             ) : (
-              <div className="py-12">
-                <h2 className="text-3xl font-black text-slate-900 mb-6">Tidak ada buku yang sedang dibaca</h2>
-                <p className="text-slate-500 font-medium mb-10 max-w-sm">Siap untuk petualangan baru? Pilih buku dari perpustakaan Anda dan mulai membaca.</p>
-                <Link to="/app/user/library" className="inline-flex px-10 py-5 bg-slate-900 text-white rounded-[24px] font-black shadow-xl hover:scale-105 transition-all text-sm items-center gap-3">
-                  Buka Perpustakaan <BookOpen size={20} />
+              <div className="py-8 md:py-12">
+                <h2 className="text-2xl md:text-3xl font-black text-slate-900 mb-4 md:mb-6">Tidak ada buku aktif</h2>
+                <p className="text-slate-500 font-medium mb-8 md:mb-10 max-w-sm mx-auto lg:mx-0 text-sm md:text-base">Mulai petualangan baru hari ini!</p>
+                <Link to="/app/user/library" className="inline-flex px-8 md:px-10 py-4 md:py-5 bg-slate-900 text-white rounded-[20px] md:rounded-[24px] font-black shadow-xl hover:scale-105 transition-all text-xs md:text-sm items-center gap-3">
+                  Pilih Buku <BookOpen size={18} />
                 </Link>
               </div>
             )}
@@ -193,96 +211,86 @@ export default function Dashboard() {
 
         {currentlyReading ? (
           <motion.div 
-            initial={{ opacity: 0, x: 50, rotate: 10 }}
-            animate={{ opacity: 1, x: 0, rotate: 5 }}
-            className="mt-12 lg:mt-0 w-64 h-80 bg-white rounded-[40px] shadow-2xl relative z-10 overflow-hidden transform shrink-0 border-[8px] border-white group"
+            initial={{ opacity: 0, y: 30, rotate: 0 }}
+            animate={{ opacity: 1, y: 0, rotate: 5 }}
+            className="mt-10 lg:mt-0 w-48 md:w-64 aspect-[3/4] bg-white rounded-[32px] md:rounded-[40px] shadow-2xl relative z-10 overflow-hidden transform shrink-0 border-[6px] md:border-[8px] border-white group"
           >
             <img 
               src={currentlyReading.cover_url || 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=400'} 
               alt={currentlyReading.title} 
-              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" 
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000 shadow-inner" 
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-center justify-center p-6 text-center opacity-0 group-hover:opacity-100 transition-opacity">
-               <span className="text-white font-black text-lg leading-tight tracking-tight uppercase px-4">
-                 {currentlyReading.title}
-               </span>
-            </div>
           </motion.div>
         ) : (
-          <div className="hidden lg:flex w-64 h-80 bg-tan-50 rounded-[40px] border-4 border-dashed border-tan-100 items-center justify-center text-tan-200">
-             <Book size={64} strokeWidth={1} />
+          <div className="mt-10 lg:mt-0 w-48 md:w-64 aspect-[3/4] bg-tan-50 rounded-[32px] md:rounded-[40px] border-2 md:border-4 border-dashed border-tan-100 items-center justify-center text-tan-200 flex">
+             <Book size={48} md={64} strokeWidth={1} />
           </div>
         )}
         
-        <div className="absolute -right-20 -top-20 w-[40%] h-[120%] bg-tan-50/50 rounded-full blur-[100px] pointer-events-none"></div>
+        <div className="absolute -right-20 -top-20 w-[60%] md:w-[40%] h-[120%] bg-tan-50/50 rounded-full blur-[60px] md:blur-[100px] pointer-events-none"></div>
       </section>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-8">
         <StatCard 
           icon={<Award className="text-primary" />} 
-          label="Buku Selesai" 
+          label="Selesai" 
           value={stats.booksFinished} 
-          suffix={`/ ${profile?.monthly_target || 5} Bln`}
+          suffix={`/ ${profile?.monthly_target || 5}`}
         />
         <StatCard 
           icon={<TrendingUp className="text-orange-400" />} 
-          label="Dibaca Hari Ini" 
+          label="Hari Ini" 
           value={stats.totalPagesRead} 
-          suffix={`/ ${stats.dailyTarget} Hal`}
+          suffix={`/ ${stats.dailyTarget}`}
         />
-        <StatCard 
-          icon={<Clock className="text-indigo-400" />} 
-          label="Target Harian" 
-          value={stats.dailyTarget} 
-          suffix="Hal/Hari"
-        />
+        <div className="col-span-2 md:col-span-1">
+          <StatCard 
+            icon={<Clock className="text-indigo-400" />} 
+            label="Target" 
+            value={stats.dailyTarget} 
+            suffix="Hal/Hari"
+          />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 pt-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-12 pt-0 md:pt-4">
         {/* Recent Activity & Favorites */}
-        <div className="lg:col-span-2 space-y-16">
+        <div className="lg:col-span-2 space-y-12 md:space-y-16">
           <section>
-            <div className="flex items-center justify-between mb-10 px-2">
-              <h2 className="text-3xl font-black text-slate-900 flex items-center gap-4 tracking-tight">
-                <Clock size={28} className="text-primary" /> Aktivitas Terbaru
+            <div className="flex items-center justify-between mb-6 md:mb-10 px-1 md:px-2">
+              <h2 className="text-xl md:text-3xl font-black text-slate-900 flex items-center gap-3 md:gap-4 tracking-tight">
+                <Clock size={24} md={28} className="text-primary" /> Aktivitas Terbaru
               </h2>
-              <Link to="/app/user/library" className="text-[10px] font-black uppercase tracking-widest text-primary px-6 py-2.5 bg-tan-50 rounded-full border border-primary/5 hover:bg-primary hover:text-white transition-all">
-                Semua Buku
+              <Link to="/app/user/library" className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-primary px-4 md:px-6 py-2 md:py-2.5 bg-tan-50 rounded-full border border-primary/5 hover:bg-primary hover:text-white transition-all">
+                Semua
               </Link>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-8">
               {recentBooks.length > 0 ? recentBooks.map((book) => (
                 <div 
                   key={book.id} 
                   onClick={() => navigate(`/app/user/details/${book.id}`)}
-                  className="bg-white p-6 rounded-[40px] border border-tan-50 hover:shadow-2xl hover:shadow-slate-100 transition-all group flex items-center gap-6 cursor-pointer"
+                  className="bg-white p-4 md:p-6 rounded-[32px] md:rounded-[40px] border border-tan-50 hover:shadow-[0_20px_50px_rgba(0,0,0,0.08)] transition-all duration-300 group flex items-center gap-4 md:gap-6 cursor-pointer hover:scale-[1.02] hover:-translate-y-1"
                 >
-                  <div className="w-24 h-32 bg-slate-50 rounded-[24px] overflow-hidden relative shadow-sm shrink-0 border border-tan-50">
+                  <div className="w-20 md:w-24 h-28 md:h-32 bg-slate-50 rounded-[20px] md:rounded-[24px] overflow-hidden relative shadow-sm shrink-0 border border-tan-50">
                     <img 
                       src={book.cover_url || 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=400'} 
                       alt={book.title} 
-                      className="w-full h-full object-cover transition-transform group-hover:scale-110" 
+                      className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-500" 
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <span className="text-[9px] font-black text-primary uppercase tracking-widest mb-1.5 block">{book.genre}</span>
-                    <h4 className="font-extrabold text-slate-900 group-hover:text-primary transition-colors text-base line-clamp-1 mb-1 tracking-tight">
+                    <span className="text-[8px] md:text-[9px] font-black text-primary uppercase tracking-widest mb-1 md:mb-1.5 block">{book.genre}</span>
+                    <h4 className="font-extrabold text-slate-900 group-hover:text-primary transition-colors text-sm md:text-base line-clamp-1 mb-0.5 md:mb-1 tracking-tight">
                       {book.title}
                     </h4>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">
+                    <p className="text-[9px] md:text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2 md:mb-4">
                       Oleh {(book.author || 'Anonim').split(' ').slice(0, 2).join(' ')}
                     </p>
-                    <div className="flex items-center gap-3">
-                       <Link 
-                         to={`/app/user/book/${book.id}`}
-                         onClick={(e) => e.stopPropagation()}
-                         className="px-4 py-1.5 bg-orange-400 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-orange-500 transition-colors shadow-lg shadow-orange-100"
-                       >
-                         Catatan Saya
-                       </Link>
-                       <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest ${
+                    <div className="flex items-center gap-2 md:gap-3">
+                       <span className={`px-2 py-0.5 rounded-lg text-[7px] md:text-[8px] font-black uppercase tracking-widest ${
                          (book.status || 'Belum Dimulai') === 'Selesai' ? 'bg-emerald-50 text-emerald-500' :
                          (book.status || 'Belum Dimulai') === 'Sedang Dibaca' ? 'bg-blue-50 text-blue-500' : 'bg-slate-50 text-slate-400'
                        }`}>
@@ -292,121 +300,114 @@ export default function Dashboard() {
                   </div>
                 </div>
               )) : (
-                <div className="col-span-2 border-2 border-dashed border-tan-100 rounded-[48px] p-20 text-center bg-white/50">
-                  <div className="w-20 h-20 bg-tan-50 rounded-[28px] flex items-center justify-center mx-auto mb-6 text-primary/20 border border-primary/10">
-                    <Book size={40} />
+                <div className="col-span-full border-2 border-dashed border-tan-100 rounded-[32px] md:rounded-[48px] p-12 md:p-20 text-center bg-white/50">
+                  <div className="w-16 h-16 md:w-20 md:h-20 bg-tan-50 rounded-[24px] md:rounded-[28px] flex items-center justify-center mx-auto mb-4 md:mb-6 text-primary/20 border border-primary/10">
+                    <Book size={32} md={40} />
                   </div>
-                  <h3 className="text-xl font-black text-slate-900 mb-2">Koleksi Kosong</h3>
-                  <p className="text-slate-400 font-medium max-w-xs mx-auto text-sm">Belum ada aktivitas membaca. Tambahkan buku favorit Anda sekarang!</p>
+                  <h3 className="text-lg md:text-xl font-black text-slate-900 mb-2">Belum ada buku</h3>
+                  <p className="text-slate-400 font-medium max-w-xs mx-auto text-xs md:text-sm">Klik 'Tambah Buku' untuk memulai koleksi Anda.</p>
                 </div>
               )}
             </div>
           </section>
 
-          {/* Favorite Section In Dashboard */}
+          {/* Favorite Section */}
           <section>
-            <div className="flex items-center justify-between mb-10 px-2">
-              <h2 className="text-3xl font-black text-slate-900 flex items-center gap-4 tracking-tight">
-                <Heart size={28} className="text-primary" fill="currentColor" /> Favorit Saya
+            <div className="flex items-center justify-between mb-6 md:mb-10 px-1 md:px-2">
+              <h2 className="text-xl md:text-3xl font-black text-slate-900 flex items-center gap-3 md:gap-4 tracking-tight">
+                <Heart size={24} md={28} className="text-primary" fill="currentColor" /> Favorit
               </h2>
-              <Link to="/app/user/bookmarks" className="text-[10px] font-black uppercase tracking-widest text-primary px-6 py-2.5 bg-tan-50 rounded-full border border-primary/5 hover:bg-primary hover:text-white transition-all">
-                Semua Favorit
+              <Link to="/app/user/bookmarks" className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-primary px-4 md:px-6 py-2 md:py-2.5 bg-tan-50 rounded-full border border-primary/5 hover:bg-primary hover:text-white transition-all">
+                Semua
               </Link>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-8">
               {favoriteBooks.length > 0 ? favoriteBooks.map((book) => (
                 <div 
                   key={book.id} 
                   onClick={() => navigate(`/app/user/details/${book.id}`)}
-                  className="bg-white p-6 rounded-[40px] border border-tan-50 hover:shadow-2xl hover:shadow-primary/5 transition-all group flex items-center gap-6 cursor-pointer"
+                  className="bg-white p-4 md:p-6 rounded-[32px] md:rounded-[40px] border border-tan-50 hover:shadow-[0_20px_50px_rgba(0,0,0,0.08)] transition-all duration-300 group flex items-center gap-4 md:gap-6 cursor-pointer hover:scale-[1.02] hover:-translate-y-1"
                 >
-                  <div className="w-24 h-32 bg-slate-50 rounded-[24px] overflow-hidden relative shadow-sm shrink-0 border border-tan-50">
+                  <div className="w-20 md:w-24 h-28 md:h-32 bg-slate-50 rounded-[20px] md:rounded-[24px] overflow-hidden relative shadow-sm shrink-0 border border-tan-50">
                     <img 
                       src={book.cover_url || 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=400'} 
                       alt={book.title} 
-                      className="w-full h-full object-cover transition-transform group-hover:scale-110" 
+                      className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-500" 
                     />
-                    <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <span className="text-[9px] font-black text-primary uppercase tracking-widest mb-1.5 block">{book.genre}</span>
-                    <h4 className="font-extrabold text-slate-900 group-hover:text-primary transition-colors text-base line-clamp-1 mb-1 tracking-tight">
+                    <span className="text-[8px] md:text-[9px] font-black text-primary uppercase tracking-widest mb-1 block">{book.genre}</span>
+                    <h4 className="font-extrabold text-slate-900 group-hover:text-primary transition-colors text-sm md:text-base line-clamp-1 mb-0.5 md:mb-1 tracking-tight">
                       {book.title}
                     </h4>
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">
+                    <p className="text-[9px] md:text-[11px] font-bold text-slate-400 uppercase tracking-widest">
                       Oleh {(book.author || 'Anonim').split(' ').slice(0, 2).join(' ')}
                     </p>
-                    <div className="flex items-center gap-3">
-                       <span className="text-[10px] font-black text-primary flex items-center gap-2">
-                          Detail <ArrowRight size={14} />
-                       </span>
-                    </div>
                   </div>
                 </div>
               )) : (
-                <div className="col-span-2 border-2 border-dashed border-tan-100 rounded-[48px] p-20 text-center bg-white/50">
-                  <div className="w-20 h-20 bg-tan-50 rounded-[28px] flex items-center justify-center mx-auto mb-6 text-primary/10 border border-primary/5">
-                    <Heart size={40} />
-                  </div>
-                  <h3 className="text-xl font-black text-slate-900 mb-2">Belum ada favorit</h3>
-                  <p className="text-slate-400 font-medium max-w-xs mx-auto text-sm">Tandai buku yang berkesan sebagai favorit untuk melihatnya di sini.</p>
+                <div className="col-span-full border-2 border-dashed border-tan-100 rounded-[32px] md:rounded-[48px] p-12 md:p-20 text-center bg-white/50">
+                  <Heart size={32} md={40} className="mx-auto mb-4 text-primary/10" />
+                  <p className="text-slate-400 font-bold text-xs md:text-sm italic">Belum ada buku favorit</p>
                 </div>
               )}
             </div>
           </section>
         </div>
 
-        {/* Sidebar Mini */}
-        <div className="space-y-10">
+        {/* Sidebar Mini - Stacked on Mobile */}
+        <div className="space-y-8 md:space-y-10">
           <section>
-            <h2 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-4 tracking-tight">
-              <Sparkles size={24} className="text-primary" /> Tindakan Cepat
+            <h2 className="text-xl md:text-2xl font-black text-slate-900 mb-6 md:mb-8 flex items-center gap-3 md:gap-4 tracking-tight">
+              <Sparkles size={20} md={24} className="text-primary" /> Tindakan Cepat
             </h2>
-            <div className="bg-white rounded-[48px] p-8 border border-tan-50 space-y-4 shadow-sm shadow-slate-100/50">
+            <div className="bg-white rounded-[32px] md:rounded-[48px] p-6 md:p-8 border border-tan-50 grid grid-cols-2 lg:grid-cols-1 gap-3 md:gap-4 shadow-sm">
                <QuickAction 
                  to="/app/user/add-book" 
-                 label="Tambah Buku" 
-                 icon={<Plus className="size-5" />} 
-                 desc="Tambah buku baru"
+                 label="Tambah" 
+                 icon={<Plus size={18} />} 
+                 desc="Buku Baru"
                  color="bg-primary text-white" 
                />
                <QuickAction 
                  to="/app/user/tracker" 
-                 label="Lacak Progres" 
-                 icon={<TrendingUp className="size-5" />} 
-                 desc="Perbarui jumlah hal"
+                 label="Lacak" 
+                 icon={<TrendingUp size={18} />} 
+                 desc="Halaman"
                  color="bg-slate-900 text-white" 
                />
-               <QuickAction 
-                 to="/app/user/quotes" 
-                 label="Kutipan" 
-                 icon={<Star className="size-5" />} 
-                 desc="Simpan kata bijak"
-                 color="bg-tan-50 text-primary border border-primary/10" 
-               />
+               <div className="col-span-2 lg:col-span-1">
+                 <QuickAction 
+                   to="/app/user/quotes" 
+                   label="Kutipan" 
+                   icon={<Star size={18} />} 
+                   desc="Ide & Quote"
+                   color="bg-tan-50 text-primary border border-primary/10" 
+                 />
+               </div>
             </div>
           </section>
 
           <section>
-            <h2 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-4 tracking-tight">
-              <Bell size={24} className="text-primary" /> Pengingat
+            <h2 className="text-xl md:text-2xl font-black text-slate-900 mb-6 md:mb-8 flex items-center gap-3 md:gap-4 tracking-tight">
+              <Bell size={20} md={24} className="text-primary" /> Pengingat
             </h2>
-            <div className="bg-white rounded-[48px] p-8 border border-tan-50 space-y-4 shadow-sm shadow-slate-100/50">
+            <div className="bg-white rounded-[32px] md:rounded-[48px] p-6 md:p-8 border border-tan-50 space-y-4 shadow-sm">
                {reminders.length > 0 ? reminders.slice(0, 2).map((r: any) => (
-                 <div key={r.id} className="p-5 bg-tan-50/30 rounded-3xl border border-tan-50 group hover:border-primary/20 transition-all">
-                    <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-1">
+                 <div key={r.id} className="p-4 md:p-5 bg-tan-50/30 rounded-2xl md:rounded-3xl border border-tan-50 group">
+                    <p className="text-[8px] md:text-[10px] font-black text-primary uppercase tracking-widest mb-1">
                       {new Date(r.scheduled_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                     </p>
-                    <h4 className="font-extrabold text-slate-800 line-clamp-1">{r.title}</h4>
+                    <h4 className="font-extrabold text-slate-800 line-clamp-1 text-xs md:text-sm">{r.title}</h4>
                  </div>
                )) : (
-                 <div className="text-center py-6">
-                    <p className="text-xs text-slate-400 font-bold italic">Tidak ada jadwal terdekat</p>
+                 <div className="text-center py-4 md:py-6">
+                    <p className="text-[10px] md:text-xs text-slate-400 font-bold italic">Tidak ada jadwal</p>
                  </div>
                )}
-               <Link to="/app/user/reminders" className="w-full flex items-center justify-center p-4 bg-slate-50 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-primary hover:text-white transition-all">
-                  Atur Jadwal
+               <Link to="/app/user/calendar" className="w-full flex items-center justify-center p-3 md:p-4 bg-slate-50 text-slate-600 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest hover:bg-primary hover:text-white transition-all">
+                  Lihat Kalender
                </Link>
             </div>
           </section>
@@ -418,15 +419,15 @@ export default function Dashboard() {
 
 function StatCard({ icon, label, value, suffix }: any) {
   return (
-    <div className="p-10 bg-white rounded-[40px] border border-tan-50 shadow-sm flex items-center gap-8 hover:border-primary/20 transition-all hover:shadow-2xl hover:shadow-slate-100 group">
-      <div className="w-20 h-20 rounded-[28px] flex items-center justify-center shrink-0 bg-tan-50 transition-all group-hover:scale-110 group-hover:bg-primary/5 border border-primary/5">
+    <div className="p-5 md:p-10 bg-white rounded-[32px] md:rounded-[40px] border border-tan-50 shadow-sm flex flex-col md:flex-row items-center md:items-center text-center md:text-left gap-3 md:gap-8 hover:border-primary/20 transition-all hover:shadow-2xl hover:shadow-slate-100 group">
+      <div className="w-12 h-12 md:w-20 md:h-20 rounded-[18px] md:rounded-[28px] flex items-center justify-center shrink-0 bg-tan-50 transition-all group-hover:scale-110 group-hover:bg-primary/5 border border-primary/5">
         {icon}
       </div>
       <div>
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{label}</p>
-        <div className="flex items-baseline gap-2">
-          <p className="text-3xl font-black text-slate-900 tracking-tight">{value}</p>
-          <p className="text-[10px] font-bold text-slate-400 uppercase">{suffix}</p>
+        <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2">{label}</p>
+        <div className="flex items-baseline justify-center md:justify-start gap-1 md:gap-2">
+          <p className="text-xl md:text-3xl font-black text-slate-900 tracking-tight leading-none">{value}</p>
+          <p className="text-[8px] md:text-[10px] font-bold text-slate-400 uppercase">{suffix}</p>
         </div>
       </div>
     </div>
@@ -437,18 +438,18 @@ function QuickAction({ to, label, icon, desc, color }: any) {
   return (
     <Link 
       to={to} 
-      className={`w-full flex items-center justify-between p-5 rounded-[28px] font-bold text-sm transition-all active:scale-[0.98] ${color} group`}
+      className={`w-full flex items-center justify-between p-3 md:p-5 rounded-[20px] md:rounded-[28px] font-bold text-sm transition-all active:scale-[0.98] ${color} group min-h-[64px]`}
     >
-      <div className="flex items-center gap-4">
-        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm group-hover:rotate-12 transition-transform">
+      <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
+        <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm group-hover:rotate-12 transition-transform shrink-0">
           {icon}
         </div>
-        <div className="text-left">
-           <p className="font-black leading-none">{label}</p>
-           <p className="text-[9px] opacity-60 font-medium uppercase tracking-widest mt-1.5">{desc}</p>
+        <div className="text-left min-w-0">
+           <p className="font-black leading-none text-xs md:text-sm truncate">{label}</p>
+           <p className="text-[7px] md:text-[9px] opacity-60 font-medium uppercase tracking-widest mt-1 md:mt-1.5 truncate">{desc}</p>
         </div>
       </div>
-      <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+      <ArrowRight size={14} md={18} className="group-hover:translate-x-1 transition-transform shrink-0" />
     </Link>
   );
 }

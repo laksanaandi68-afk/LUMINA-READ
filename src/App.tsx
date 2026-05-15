@@ -12,9 +12,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import ReviewManagement from './pages/admin/ReviewManagement';
 import AdminAnalytics from './pages/admin/AdminAnalytics';
 import BookManagement from './pages/admin/BookManagement';
-import UserManagement from './pages/admin/UserManagement';
 import ReportManagement from './pages/admin/ReportManagement';
-import ChatMonitoring from './pages/admin/ChatMonitoring';
 import TestimonialManagement from './pages/admin/TestimonialManagement';
 
 // User Pages
@@ -28,17 +26,14 @@ import BookView from './pages/BookView';
 import BookDetails from './pages/BookDetails';
 import Bookmarks from './pages/Bookmarks';
 import Tracker from './pages/Tracker';
+import UserReports from './pages/UserReports';
 import CalendarPage from './pages/Calendar';
-import InteractiveStories from './pages/InteractiveStories';
-import Chat from './pages/Chat';
-import AdminChat from './pages/admin/AdminChat';
-import Friends from './pages/social/Friends';
-import ProfileDetail from './pages/social/ProfileDetail';
-import Notifications from './pages/social/Notifications';
+import Testimonial from './pages/Testimonial';
 
 function ProtectedRoute({ children, adminOnly = false }: { children: React.ReactNode, adminOnly?: boolean }) {
   const { user, profile, loading, isAdmin } = useAuth();
 
+  // If auth is still determining if we have a user at all
   if (loading) return (
     <div className="h-screen w-screen flex items-center justify-center bg-[#fdfcfb]">
       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -47,8 +42,13 @@ function ProtectedRoute({ children, adminOnly = false }: { children: React.React
 
   if (!user) return <Navigate to="/login" />;
   
-  if (adminOnly && !isAdmin) {
-    return <Navigate to="/app/user/dashboard" />;
+  // If we have a user but profile is still loading (initial state after login)
+  // and we need to check admin status, we check email as a high-confidence fallback
+  if (adminOnly) {
+    const isActuallyAdmin = isAdmin || user.email === 'admin@gmail.com';
+    if (!isActuallyAdmin) {
+      return <Navigate to="/app/user/dashboard" />;
+    }
   }
 
   return <>{children}</>;
@@ -72,13 +72,10 @@ export default function App() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="books" element={<BookManagement />} />
-            <Route path="users" element={<UserManagement />} />
             <Route path="reports" element={<ReportManagement />} />
-            <Route path="chats" element={<ChatMonitoring />} />
             <Route path="reviews" element={<ReviewManagement />} />
             <Route path="analytics" element={<AdminAnalytics />} />
             <Route path="testimoni" element={<TestimonialManagement />} />
-            <Route path="chat" element={<AdminChat />} />
           </Route>
 
           {/* User App Branch */}
@@ -90,19 +87,17 @@ export default function App() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} /> 
             <Route path="library" element={<Library />} />
+            <Route path="testimonial" element={<Testimonial />} />
             <Route path="add-book" element={<AddBook />} />
             <Route path="details/:id" element={<BookDetails />} />
             <Route path="book/:id" element={<BookView />} />
             <Route path="tracker" element={<Tracker />} />
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="bookmarks" element={<Bookmarks />} />
+            <Route path="reports" element={<UserReports />} />
             <Route path="reminders" element={<Reminders />} />
             <Route path="quotes" element={<Quotes />} />
             <Route path="profile" element={<Profile />} />
-            <Route path="profile/:id" element={<ProfileDetail />} />
-            <Route path="notifications" element={<Notifications />} />
-            <Route path="friends" element={<Friends />} />
-            <Route path="chat" element={<Chat />} />
           </Route>
           
           <Route path="/app/*" element={<Navigate to="/" />} />

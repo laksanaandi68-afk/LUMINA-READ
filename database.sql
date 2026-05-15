@@ -231,7 +231,50 @@ TO authenticated
 USING (auth.uid() = user_id)
 WITH CHECK (auth.uid() = user_id);
 
--- 13. REPORTS (Moderation System)
+-- 13. USER TICKETS (User to Admin Reports)
+CREATE TABLE IF NOT EXISTS public.user_tickets (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  title TEXT NOT NULL,
+  category TEXT NOT NULL,
+  description TEXT NOT NULL,
+  image_url TEXT,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'diproses', 'selesai', 'ditolak')),
+  admin_response TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.user_tickets ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users view own tickets or admin all" ON public.user_tickets;
+CREATE POLICY "Users view own tickets or admin all" 
+ON public.user_tickets FOR SELECT 
+TO authenticated 
+USING (
+  auth.uid() = user_id OR 
+  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+);
+
+DROP POLICY IF EXISTS "Users create own tickets" ON public.user_tickets;
+CREATE POLICY "Users create own tickets" 
+ON public.user_tickets FOR INSERT 
+TO authenticated 
+WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Admins update tickets" ON public.user_tickets;
+CREATE POLICY "Admins update tickets" 
+ON public.user_tickets FOR UPDATE 
+TO authenticated 
+USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin');
+
+DROP POLICY IF EXISTS "Admins delete tickets" ON public.user_tickets;
+CREATE POLICY "Admins delete tickets" 
+ON public.user_tickets FOR DELETE 
+TO authenticated 
+USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin');
+
+-- 14. REPORTS (Moderation System)
 CREATE TABLE IF NOT EXISTS public.reports (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   reporter_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -307,7 +350,9 @@ DROP POLICY IF EXISTS "Books access" ON public.books;
 CREATE POLICY "Books access"
 ON public.books
 FOR ALL
-USING (auth.uid() = owner_id);
+TO authenticated
+USING (auth.uid() = owner_id)
+WITH CHECK (auth.uid() = owner_id);
 
 -- =========================
 -- READING TRACK POLICY
@@ -406,7 +451,7 @@ BEGIN
     END IF;
 END $$;
 
-ALTER PUBLICATION supabase_realtime SET TABLE public.messages, public.reminders, public.profiles, public.friends, public.reports;
+ALTER PUBLICATION supabase_realtime SET TABLE public.messages, public.reminders, public.profiles, public.friends, public.reports, public.user_tickets;
 
 -- =========================
 -- AUTO UPDATE TIMESTAMP

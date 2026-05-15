@@ -141,7 +141,7 @@ export default function Quotes() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               key={quote.id}
-              className="break-inside-avoid bg-white p-10 rounded-[48px] border border-tan-50 shadow-sm hover:shadow-2xl transition-all group relative"
+              className="break-inside-avoid bg-white p-10 rounded-[48px] border border-tan-50 shadow-sm hover:shadow-[0_20px_50px_rgba(0,0,0,0.08)] transition-all duration-500 group relative hover:scale-[1.01] hover:-translate-y-1"
             >
               <div className="absolute top-8 left-8 text-primary/10 scale-[3]">
                 <QuoteIcon size={24} fill="currentColor" />

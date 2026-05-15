@@ -6,7 +6,6 @@ import {
   BookOpen, 
   Users, 
   BarChart3, 
-  MessageSquare, 
   LogOut,
   ShieldCheck,
   Menu,
@@ -14,14 +13,14 @@ import {
   Search,
   Heart,
   ShieldAlert,
-  MessageCircle,
-  AlertCircle
+  AlertCircle,
+  Star
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function AdminLayout() {
-  const { profile } = useAuth();
+  const { profile, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setSidebarOpen] = useState(true);
@@ -29,20 +28,7 @@ export default function AdminLayout() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = async () => {
-    try {
-      // Clear all possible local session data first for immediate UI response
-      localStorage.clear();
-      sessionStorage.clear();
-      
-      // Perform Supabase sign out
-      await supabase.auth.signOut();
-      
-      // Full redirect to landing to reset all React states/providers
-      window.location.replace('/');
-    } catch (err) {
-      console.error("Logout error:", err);
-      window.location.replace('/');
-    }
+    await logout();
   };
 
   useEffect(() => {
@@ -81,9 +67,8 @@ export default function AdminLayout() {
   const adminLinks = [
     { to: '/app/admin/dashboard', icon: LayoutDashboard, label: 'Overview' },
     { to: '/app/admin/reports', icon: ShieldAlert, label: 'Laporan User', badge: pendingReports },
-    { to: '/app/admin/chats', icon: MessageCircle, label: 'Pantau Chat' },
-    { to: '/app/admin/users', icon: Users, label: 'Users & Bans' },
     { to: '/app/admin/books', icon: BookOpen, label: 'Koleksi Buku' },
+    { to: '/app/admin/testimoni', icon: Star, label: 'Testimoni' },
     { to: '/app/admin/analytics', icon: BarChart3, label: 'Statistik' },
   ];
 

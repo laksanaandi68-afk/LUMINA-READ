@@ -372,7 +372,7 @@ export default function TestimonialManagement() {
                           )}
                         </div>
                         <div className="min-w-0">
-                          <h4 className="font-bold text-slate-900 text-sm truncate">{t.profiles?.display_name || 'Anonim'}</h4>
+                          <h4 className="font-bold text-slate-900 text-sm truncate">{t.profiles?.display_name || 'Pembaca'}</h4>
                           <div className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
                             <span>-</span>
                             <span>{new Date(t.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>

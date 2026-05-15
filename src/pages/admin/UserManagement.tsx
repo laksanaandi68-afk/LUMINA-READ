@@ -230,7 +230,7 @@ export default function UserManagement() {
                               )}
                            </div>
                            <div>
-                              <p className="text-sm font-bold text-slate-900 tracking-tight">{user.display_name || 'Anonim'}</p>
+                              <p className="text-sm font-bold text-slate-900 tracking-tight">{user.display_name || 'Pembaca'}</p>
                               <p className="text-[10px] text-slate-400 font-medium lowercase">@{user.username || user.email.split('@')[0]}</p>
                            </div>
                         </div>

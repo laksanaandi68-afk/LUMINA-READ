@@ -18,6 +18,9 @@
 }
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
   body {
     @apply font-sans text-slate-800 bg-[#fdfcfb];
   }

@@ -20,7 +20,25 @@ export default function Reminders() {
   });
 
   useEffect(() => {
-    if (user) fetchReminders();
+    if (!user) return;
+    
+    fetchReminders();
+
+    const channel = supabase
+      .channel('reminders_page_sync')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'reminders',
+        filter: `user_id=eq.${user.id}`
+      }, () => {
+        fetchReminders();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
 
   const fetchReminders = async () => {

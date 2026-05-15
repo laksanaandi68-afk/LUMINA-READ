@@ -130,7 +130,7 @@ export default function ReviewManagement() {
                              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 font-bold overflow-hidden shadow-sm">
                                 {r.profiles?.avatar_url ? <img src={r.profiles.avatar_url} className="w-full h-full object-cover" /> : r.profiles?.display_name?.[0]}
                              </div>
-                             <p className="text-sm font-bold text-slate-900">{r.profiles?.display_name || 'Anonim'}</p>
+                             <p className="text-sm font-bold text-slate-900">{r.profiles?.display_name || 'Pembaca'}</p>
                           </div>
                        </td>
                        <td className="px-10 py-6">
